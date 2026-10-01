@@ -209,4 +209,5 @@ class GitHubService:
         expected = "sha256=" + hmac.new(
             secret.encode("utf-8"), payload, hashlib.sha256
         ).hexdigest()
+        # Note: hmac.new() is the correct Python API
         return hmac.compare_digest(expected, signature)
