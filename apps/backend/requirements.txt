@@ -6,9 +6,10 @@ python-multipart==0.0.12
 # Database
 sqlalchemy==2.0.35
 alembic==1.13.3
-asyncpg==0.29.0
-psycopg2-binary==2.9.9
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
 pgvector==0.3.2
+greenlet>=3.0.0
 
 # Redis / Queue
 redis==5.1.0

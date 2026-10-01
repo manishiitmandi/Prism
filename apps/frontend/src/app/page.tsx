@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { api, Repository } from '@/lib/api';
 import { formatTimeAgo } from '@/lib/utils';
 import Link from 'next/link';
+import NavBar from '@/components/NavBar';
 
 export default function HomePage() {
   const [repos, setRepos] = useState<Repository[]>([]);
@@ -50,44 +51,8 @@ export default function HomePage() {
   }
 
   return (
-    <div className="page-wrapper">
-      {/* Navbar */}
-      <nav style={{
-        borderBottom: '1px solid var(--border)',
-        background: 'rgba(10,11,15,0.95)',
-        backdropFilter: 'blur(12px)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-      }}>
-        <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 60 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* Logo */}
-            <div style={{
-              width: 32, height: 32,
-              borderRadius: 8,
-              background: 'var(--gradient-primary)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1rem', fontWeight: 800, color: 'white',
-              boxShadow: 'var(--shadow-glow)',
-            }}>P</div>
-            <span style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>PRism</span>
-            <span style={{
-              background: 'var(--accent-glow)',
-              color: 'var(--accent-secondary)',
-              border: '1px solid rgba(108,99,255,0.2)',
-              borderRadius: 100,
-              padding: '1px 8px',
-              fontSize: '0.65rem',
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-            }}>BETA</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>AI Pull Request Risk Analyzer</span>
-          </div>
-        </div>
-      </nav>
+    <div className="page-wrapper" suppressHydrationWarning>
+      <NavBar badge="BETA" subtitle="AI Pull Request Risk Analyzer" />
 
       <main className="container" style={{ paddingTop: 48, paddingBottom: 64, flex: 1 }}>
         {/* Hero */}
@@ -112,7 +77,7 @@ export default function HomePage() {
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-secondary)', display: 'inline-block' }} />
             Static Analysis + AI Reasoning
           </div>
-          <h1 style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', marginBottom: 16, background: 'linear-gradient(135deg, #f0f2f8 0%, var(--accent-secondary) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          <h1 className="text-gradient" style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', marginBottom: 16 }}>
             Know your PR risk<br />before it hits production
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', maxWidth: 560, margin: '0 auto 32px' }}>
@@ -273,7 +238,7 @@ export default function HomePage() {
                           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                             ⎇ {repo.default_branch}
                           </span>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }} suppressHydrationWarning>
                             Added {formatTimeAgo(repo.created_at)}
                           </span>
                         </div>

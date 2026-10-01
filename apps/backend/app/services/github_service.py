@@ -4,7 +4,6 @@ import base64
 import hashlib
 import hmac
 from dataclasses import dataclass
-from typing import Any
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -58,7 +57,7 @@ class RepoData:
 class GitHubService:
     """
     Wraps GitHub REST API calls.
-    
+
     Uses a PAT for authentication (OAuth can be added later).
     Implements retries with exponential backoff for rate limits.
     """
@@ -79,6 +78,7 @@ class GitHubService:
             base_url=self.BASE_URL,
             headers=self._headers,
             timeout=30.0,
+            follow_redirects=True,
         )
 
     @retry(
@@ -157,9 +157,7 @@ class GitHubService:
         wait=wait_exponential(multiplier=1, min=2, max=30),
         reraise=True,
     )
-    async def get_file_content(
-        self, owner: str, name: str, file_path: str, ref: str
-    ) -> str | None:
+    async def get_file_content(self, owner: str, name: str, file_path: str, ref: str) -> str | None:
         """Fetch file content at a specific commit/branch."""
         async with self._client() as client:
             resp = await client.get(
@@ -188,9 +186,7 @@ class GitHubService:
             resp.raise_for_status()
             return resp.json()
 
-    async def list_repo_files(
-        self, owner: str, name: str, ref: str, path: str = ""
-    ) -> list[dict]:
+    async def list_repo_files(self, owner: str, name: str, ref: str, path: str = "") -> list[dict]:
         """List files in a directory recursively via Git Trees API."""
         async with self._client() as client:
             resp = await client.get(
@@ -205,9 +201,12 @@ class GitHubService:
         """Verify GitHub webhook HMAC-SHA256 signature."""
         secret = settings.github_webhook_secret
         if not secret:
-            return True  # No secret configured = skip validation (dev mode)
-        expected = "sha256=" + hmac.new(
-            secret.encode("utf-8"), payload, hashlib.sha256
-        ).hexdigest()
+            if settings.environment == "production":
+                logger.error(
+                    "Rejecting webhook: GITHUB_WEBHOOK_SECRET is not configured in production"
+                )
+                return False
+            return True  # No secret configured = skip validation (dev mode only)
+        expected = "sha256=" + hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
         # Note: hmac.new() is the correct Python API
         return hmac.compare_digest(expected, signature)

@@ -20,15 +20,19 @@ def configure_logging(debug: bool = False) -> None:
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
-            structlog.stdlib.add_log_level,
+            structlog.stdlib.filter_by_level,
             structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.StackInfoRenderer(),
-            structlog.dev.ConsoleRenderer() if debug else structlog.processors.JSONRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.dev.ConsoleRenderer() if debug else structlog.processors.JSONRenderer(),  # type: ignore[list-item]
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(level),
+        wrapper_class=structlog.stdlib.BoundLogger,
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
     )
 
 

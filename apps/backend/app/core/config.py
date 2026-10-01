@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "../../.env", "../.env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -23,10 +23,10 @@ class Settings(BaseSettings):
 
     # API
     api_v1_prefix: str = "/api/v1"
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    cors_origins: list[str] | str = ["http://localhost:3000", "http://localhost:3001"]
 
     # Database
-    database_url: str = "postgresql+asyncpg://prism:prism@localhost:5432/prism"
+    database_url: str = "postgresql+asyncpg://prism:prism@localhost:5433/prism"
     database_pool_size: int = 10
     database_max_overflow: int = 20
 
@@ -37,12 +37,15 @@ class Settings(BaseSettings):
     github_token: str = ""
     github_webhook_secret: str = ""
 
-    # LLM (OpenAI by default, Anthropic optional)
-    llm_provider: Literal["openai", "anthropic"] = "openai"
+    # LLM (OpenAI by default, Anthropic or Gemini optional)
+    llm_provider: Literal["openai", "anthropic", "gemini"] = "openai"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    openai_base_url: str | None = None
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-3-5-haiku-20241022"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
 
     # Embeddings
     embedding_model: str = "text-embedding-3-small"

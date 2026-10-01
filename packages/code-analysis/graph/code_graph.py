@@ -88,6 +88,8 @@ class CodeGraph:
                 next_queue = []
                 for node in queue:
                     for pred in self._graph.predecessors(node):
+                        if self._graph[pred][node].get("kind") == "CONTAINS":
+                            continue
                         if pred not in visited:
                             visited.add(pred)
                             predecessors.add(pred)
@@ -111,6 +113,8 @@ class CodeGraph:
                 next_queue = []
                 for node in queue:
                     for succ in self._graph.successors(node):
+                        if self._graph[node][succ].get("kind") == "CONTAINS":
+                            continue
                         if succ not in visited:
                             visited.add(succ)
                             successors.add(succ)

@@ -3,6 +3,7 @@
 import { useState, useEffect, use, useCallback } from 'react';
 import { api, Analysis } from '@/lib/api';
 import Link from 'next/link';
+import NavBar from '@/components/NavBar';
 import {
   getRiskBadgeClass, getStatusColor, getStatusLabel,
   isTerminalStatus, formatDuration, getLanguageColor, truncatePath
@@ -202,7 +203,7 @@ export default function AnalysisPage({ params }: Props) {
               { label: 'Related Tests', value: analysis.dependency_metrics.affected_tests ?? '—' },
             ].map(stat => (
               <div key={stat.label} className="card" style={{ padding: 20, textAlign: 'center' }}>
-                <div style={{ fontSize: '2rem', fontWeight: 800, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 4 }}>
+                <div className="stat-number">
                   {stat.value}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -497,16 +498,9 @@ function EvidenceTab({ analysis }: { analysis: Analysis }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="page-wrapper">
-      <nav style={{ borderBottom: '1px solid var(--border)', background: 'rgba(10,11,15,0.95)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 60 }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: 'var(--text-primary)' }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--gradient-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 800, color: 'white', boxShadow: 'var(--shadow-glow)' }}>P</div>
-            <span style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>PRism</span>
-          </Link>
-        </div>
-      </nav>
-      <main className="container">{children}</main>
+    <div className="page-wrapper" suppressHydrationWarning>
+      <NavBar />
+      <main className="container" suppressHydrationWarning>{children}</main>
     </div>
   );
 }

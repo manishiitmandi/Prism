@@ -6,6 +6,7 @@ from typing import Any
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.schemas.schemas import LLMRiskAnalysis
+from app.schemas.schemas import RiskFactor as RiskFactorSchema
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -87,7 +88,7 @@ Respond with ONLY a JSON object with this exact schema:
 class LLMService:
     """
     Orchestrates LLM calls for PR risk analysis.
-    
+
     Supports OpenAI and Anthropic.
     Always uses structured/JSON output.
     Falls back gracefully if LLM is unavailable.
@@ -95,19 +96,36 @@ class LLMService:
 
     def __init__(self) -> None:
         self._provider = settings.llm_provider
-        self._openai_client = None
-        self._anthropic_client = None
+        self._openai_client: Any = None
+        self._anthropic_client: Any = None
 
-        if self._provider == "openai" and settings.openai_api_key:
+        if self._provider == "gemini" and (settings.gemini_api_key or settings.openai_api_key):
             try:
                 from openai import AsyncOpenAI
-                self._openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+
+                api_key = settings.gemini_api_key or settings.openai_api_key
+                self._openai_client = AsyncOpenAI(
+                    api_key=api_key,
+                    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                )
+            except ImportError:
+                logger.warning("openai package not installed")
+
+        elif self._provider == "openai" and settings.openai_api_key:
+            try:
+                from openai import AsyncOpenAI
+
+                self._openai_client = AsyncOpenAI(
+                    api_key=settings.openai_api_key,
+                    base_url=settings.openai_base_url,
+                )
             except ImportError:
                 logger.warning("openai package not installed")
 
         elif self._provider == "anthropic" and settings.anthropic_api_key:
             try:
                 from anthropic import AsyncAnthropic
+
                 self._anthropic_client = AsyncAnthropic(api_key=settings.anthropic_api_key)
             except ImportError:
                 logger.warning("anthropic package not installed")
@@ -136,10 +154,7 @@ class LLMService:
         signals = evidence.get("dependency_metrics", {})
 
         # Format risk signals readably
-        signals_str = "\n".join(
-            f"- {k.replace('_', ' ').title()}: {v}"
-            for k, v in signals.items()
-        )
+        signals_str = "\n".join(f"- {k.replace('_', ' ').title()}: {v}" for k, v in signals.items())
 
         # Format changed files
         changed_files_list = evidence.get("changed_files", [])
@@ -150,9 +165,7 @@ class LLMService:
         )
 
         # Format changed symbols
-        symbols_str = "\n".join(
-            f"- {s}" for s in evidence.get("changed_symbols", [])[:30]
-        )
+        symbols_str = "\n".join(f"- {s}" for s in evidence.get("changed_symbols", [])[:30])
 
         # Format affected components
         affected_str = "\n".join(
@@ -161,14 +174,15 @@ class LLMService:
         )
 
         # Format related tests
-        tests_str = "\n".join(
-            f"- {t}" for t in evidence.get("related_tests", [])[:10]
-        ) or "None detected"
+        tests_str = (
+            "\n".join(f"- {t}" for t in evidence.get("related_tests", [])[:10]) or "None detected"
+        )
 
         # Format missing test candidates
-        missing_str = "\n".join(
-            f"- {m}" for m in evidence.get("missing_test_candidates", [])[:10]
-        ) or "None identified"
+        missing_str = (
+            "\n".join(f"- {m}" for m in evidence.get("missing_test_candidates", [])[:10])
+            or "None identified"
+        )
 
         # Code snippets (keep short)
         snippets_str = json.dumps(evidence.get("relevant_code", [])[:3], indent=2)[:2000]
@@ -192,8 +206,13 @@ class LLMService:
 
     async def _call_openai(self, prompt: str) -> LLMRiskAnalysis:
         """Call OpenAI with JSON response format."""
+        if not self._openai_client:
+            raise RuntimeError("OpenAI client is not initialized")
+        model = settings.gemini_model if self._provider == "gemini" else settings.openai_model
+        if self._provider == "gemini" and model in ("gemini-1.5-flash", "gemini-1.5-pro"):
+            model = "gemini-2.5-flash"
         response = await self._openai_client.chat.completions.create(
-            model=settings.openai_model,
+            model=model,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
@@ -202,12 +221,14 @@ class LLMService:
             temperature=0.1,
             max_tokens=4096,
         )
-        raw_json = response.choices[0].message.content
+        raw_json = response.choices[0].message.content or "{}"
         data = json.loads(raw_json)
         return LLMRiskAnalysis(**data)
 
     async def _call_anthropic(self, prompt: str) -> LLMRiskAnalysis:
         """Call Anthropic Claude."""
+        if not self._anthropic_client:
+            raise RuntimeError("Anthropic client is not initialized")
         response = await self._anthropic_client.messages.create(
             model=settings.anthropic_model,
             max_tokens=4096,
@@ -215,7 +236,15 @@ class LLMService:
             messages=[{"role": "user", "content": prompt}],
         )
         # Extract JSON from response
-        content = response.content[0].text
+        first_block = response.content[0]
+        content = getattr(first_block, "text", str(first_block)).strip()
+        if "```" in content:
+            import re
+
+            match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
+            if match:
+                data = json.loads(match.group(1))
+                return LLMRiskAnalysis(**data)
         # Find JSON block
         start = content.find("{")
         end = content.rfind("}") + 1
@@ -232,7 +261,6 @@ class LLMService:
         signals = evidence.get("dependency_metrics", {})
         changed_files = evidence.get("changed_files", [])
         changed_symbols = evidence.get("changed_symbols", [])
-        affected = evidence.get("affected_components", [])
 
         # Calculate risk level from signals
         score = 0
@@ -251,31 +279,43 @@ class LLMService:
         else:
             risk = "LOW"
 
-        risk_factors = []
+        risk_factors: list[dict[str, Any]] = []
         if len(changed_files) >= 5:
-            risk_factors.append({
-                "title": "Large change surface",
-                "description": f"{len(changed_files)} files changed, increasing risk of unintended side effects.",
-                "evidence": [f.get("path", "") for f in changed_files[:5]],
-            })
+            risk_factors.append(
+                {
+                    "title": "Large change surface",
+                    "description": f"{len(changed_files)} files changed, increasing risk of unintended side effects.",
+                    "evidence": [f.get("path", "") for f in changed_files[:5]],
+                }
+            )
         if signals.get("database_changed"):
-            risk_factors.append({
-                "title": "Database model modified",
-                "description": "Database schema or model changes can cause data compatibility issues.",
-                "evidence": [f.get("path", "") for f in changed_files if "model" in f.get("path", "").lower()],
-            })
+            risk_factors.append(
+                {
+                    "title": "Database model modified",
+                    "description": "Database schema or model changes can cause data compatibility issues.",
+                    "evidence": [
+                        f.get("path", "")
+                        for f in changed_files
+                        if "model" in f.get("path", "").lower()
+                    ],
+                }
+            )
         if signals.get("auth_changed"):
-            risk_factors.append({
-                "title": "Authentication/authorization modified",
-                "description": "Security-sensitive code changes require thorough review.",
-                "evidence": [],
-            })
+            risk_factors.append(
+                {
+                    "title": "Authentication/authorization modified",
+                    "description": "Security-sensitive code changes require thorough review.",
+                    "evidence": [],
+                }
+            )
         if signals.get("tests_absent"):
-            risk_factors.append({
-                "title": "No related tests detected",
-                "description": "Changed symbols have no associated test coverage in the repository.",
-                "evidence": changed_symbols[:5],
-            })
+            risk_factors.append(
+                {
+                    "title": "No related tests detected",
+                    "description": "Changed symbols have no associated test coverage in the repository.",
+                    "evidence": [str(s) for s in changed_symbols[:5]],
+                }
+            )
 
         return LLMRiskAnalysis(
             summary=(
@@ -287,10 +327,16 @@ class LLMService:
             ),
             risk_level=risk,
             risk_factors=[
-                type("RF", (), {"title": rf["title"], "description": rf["description"], "evidence": rf["evidence"]})()
+                RiskFactorSchema(
+                    title=str(rf["title"]),
+                    description=str(rf["description"]),
+                    evidence=[str(e) for e in rf["evidence"]],
+                )
                 for rf in risk_factors
-            ] if False else [],  # Use proper Pydantic objects
+            ],
             affected_components=[],
             recommended_tests=[],
-            edge_cases=["LLM analysis unavailable — configure OPENAI_API_KEY or ANTHROPIC_API_KEY for full analysis"],
+            edge_cases=[
+                "LLM analysis unavailable — configure OPENAI_API_KEY or ANTHROPIC_API_KEY for full analysis"
+            ],
         )

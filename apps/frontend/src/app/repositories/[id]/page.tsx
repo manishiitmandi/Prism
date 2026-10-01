@@ -4,6 +4,7 @@ import { useState, useEffect, use } from 'react';
 import { api, Repository, PullRequest } from '@/lib/api';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import NavBar from '@/components/NavBar';
 
 interface Props { params: Promise<{ id: string }> }
 
@@ -216,18 +217,5 @@ export default function RepositoryPage({ params }: Props) {
         </div>
       </main>
     </div>
-  );
-}
-
-function NavBar() {
-  return (
-    <nav style={{ borderBottom: '1px solid var(--border)', background: 'rgba(10,11,15,0.95)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 100 }}>
-      <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 60 }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: 'var(--text-primary)' }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--gradient-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 800, color: 'white', boxShadow: 'var(--shadow-glow)' }}>P</div>
-          <span style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>PRism</span>
-        </Link>
-      </div>
-    </nav>
   );
 }

@@ -25,11 +25,25 @@ async def _run_analysis_background(analysis_id: str, db_url: str) -> None:
     engine = create_async_engine(db_url)
     SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
-    async with SessionLocal() as session:
-        pipeline = AnalysisPipeline(session)
-        await pipeline.run(analysis_id)
-
-    await engine.dispose()
+    try:
+        async with SessionLocal() as session:
+            pipeline = AnalysisPipeline(session)
+            await pipeline.run(analysis_id)
+    except Exception as e:
+        logger.error("Unhandled exception in background analysis", analysis_id=analysis_id, error=str(e))
+        try:
+            async with SessionLocal() as err_session:
+                stmt = select(Analysis).where(Analysis.id == analysis_id)
+                res = await err_session.execute(stmt)
+                rec = res.scalar_one_or_none()
+                if rec and rec.status != AnalysisStatus.COMPLETED:
+                    rec.status = AnalysisStatus.FAILED
+                    rec.error_message = f"Background pipeline error: {str(e)}"
+                    await err_session.commit()
+        except Exception as inner_e:
+            logger.error("Failed to update analysis status to FAILED", analysis_id=analysis_id, error=str(inner_e))
+    finally:
+        await engine.dispose()
 
 
 @router.post(

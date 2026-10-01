@@ -8,9 +8,39 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 # Patterns that indicate sensitive areas
-_AUTH_PATTERNS = {"auth", "authentication", "authorization", "permission", "token", "jwt", "oauth", "login"}
-_DB_PATTERNS = {"model", "migration", "schema", "alembic", "sequelize", "prisma", "entity", "repository", "dao"}
-_CONFIG_PATTERNS = {"config", "settings", "env", "docker", "kubernetes", "deploy", "ci", ".yml", ".yaml", ".toml"}
+_AUTH_PATTERNS = {
+    "auth",
+    "authentication",
+    "authorization",
+    "permission",
+    "token",
+    "jwt",
+    "oauth",
+    "login",
+}
+_DB_PATTERNS = {
+    "model",
+    "migration",
+    "schema",
+    "alembic",
+    "sequelize",
+    "prisma",
+    "entity",
+    "repository",
+    "dao",
+}
+_CONFIG_PATTERNS = {
+    "config",
+    "settings",
+    "env",
+    "docker",
+    "kubernetes",
+    "deploy",
+    "ci",
+    ".yml",
+    ".yaml",
+    ".toml",
+}
 _PAYMENT_PATTERNS = {"payment", "billing", "stripe", "paypal", "invoice", "checkout", "transaction"}
 _API_PATTERNS = {"route", "router", "controller", "endpoint", "handler", "view", "api"}
 
@@ -47,7 +77,7 @@ class ImpactResult:
 class ImpactAnalyzer:
     """
     Performs impact analysis using the code graph.
-    
+
     For each changed symbol:
     1. Find callers (direct dependents)
     2. Find transitive dependents
@@ -85,47 +115,70 @@ class ImpactAnalyzer:
             signals.payment_changed |= any(p in f_lower for p in _PAYMENT_PATTERNS)
 
             # Detect test files changed
-            if any(p in {"test", "tests", "spec", "specs"} for p in path_parts) or \
-               name_lower.startswith("test_") or ".test." in name_lower or ".spec." in name_lower:
+            if (
+                any(p in {"test", "tests", "spec", "specs"} for p in path_parts)
+                or name_lower.startswith("test_")
+                or ".test." in name_lower
+                or ".spec." in name_lower
+            ):
                 signals.tests_changed = True
 
         # Find affected components via graph
-        all_affected: set[str] = set()
+        direct_affected: set[str] = set()
+        transitive_affected: set[str] = set()
         all_tests: set[str] = set()
 
         for symbol in changed_symbols:
-            # Direct callers
+            # Direct callers (depth=1, CALLS edges only)
             callers = self._graph.get_callers(symbol)
-            # Transitive dependents
-            dependents = self._graph.get_dependents(symbol, max_depth=3)
+            # Transitive dependents (up to depth 3, all incoming edges)
+            all_dependents = self._graph.get_dependents(symbol, max_depth=3)
+            # Transitive = dependents that are NOT direct callers
+            transitive = [d for d in all_dependents if d not in callers and d != symbol]
 
-            for dep in callers + dependents:
+            for dep in callers:
                 node_info = self._graph.get_node_info(dep)
                 if not node_info:
                     continue
-                is_test = node_info.get("is_test", False)
-                kind = node_info.get("kind", "unknown")
-
-                if is_test:
+                if node_info.get("is_test"):
                     all_tests.add(dep)
-                elif dep != symbol and dep not in changed_files and dep not in changed_symbols:
-                    all_affected.add(dep)
+                elif dep not in changed_files and dep not in changed_symbols:
+                    direct_affected.add(dep)
+
+            for dep in transitive:
+                node_info = self._graph.get_node_info(dep)
+                if not node_info:
+                    continue
+                if node_info.get("is_test"):
+                    all_tests.add(dep)
+                elif dep not in changed_files and dep not in changed_symbols:
+                    transitive_affected.add(dep)
 
             # Get related tests
             symbol_tests = self._graph.get_related_tests([symbol])
             all_tests.update(symbol_tests)
 
-        # Also check file-level importers
+        # Also check file-level importers (direct dependents at file level)
         for f in changed_files:
             importers = self._graph.get_importers(f)
             for imp in importers:
                 node_info = self._graph.get_node_info(imp)
-                if node_info and not node_info.get("is_test", False):
-                    all_affected.add(imp)
+                if not node_info:
+                    continue
+                if node_info.get("is_test", False):
+                    all_tests.add(imp)
+                elif imp not in changed_files and imp not in changed_symbols:
+                    direct_affected.add(imp)
 
-        signals.direct_dependents = len(all_affected)
-        signals.transitive_dependents = len(all_affected)  # simplified for MVP
+        all_affected: set[str] = direct_affected | transitive_affected
+        signals.direct_dependents = len(direct_affected)
+        signals.transitive_dependents = len(transitive_affected)
         signals.affected_tests = len(all_tests)
+
+        # High centrality changed symbols (nodes depended on heavily)
+        signals.high_centrality_nodes = sum(
+            1 for s in changed_symbols if self._graph.centrality_score(s) > 3
+        )
 
         # Affected modules (unique file paths)
         affected_files: set[str] = set()
@@ -156,14 +209,11 @@ class ImpactAnalyzer:
         for test in all_tests:
             node_info = self._graph.get_node_info(test)
             if node_info:
-                file_path = node_info.get("file_path", "")
                 for sym in changed_symbols:
                     if sym.lower() in test.lower():
                         tested_symbols.add(sym)
 
-        result.missing_test_candidates = [
-            s for s in changed_symbols if s not in tested_symbols
-        ]
+        result.missing_test_candidates = [s for s in changed_symbols if s not in tested_symbols]
 
         result.dependency_metrics = {
             "direct_dependents": signals.direct_dependents,
@@ -177,6 +227,7 @@ class ImpactAnalyzer:
             "payment_changed": signals.payment_changed,
             "tests_changed": signals.tests_changed,
             "tests_absent": signals.tests_absent,
+            "high_centrality_nodes": signals.high_centrality_nodes,
         }
 
         # Graph visualization data (focused subgraph)

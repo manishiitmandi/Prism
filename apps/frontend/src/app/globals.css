@@ -96,6 +96,22 @@ code, pre {
 a { color: var(--accent-secondary); text-decoration: none; }
 a:hover { color: var(--accent-primary); }
 
+.text-gradient {
+  background: linear-gradient(135deg, #f0f2f8 0%, var(--accent-secondary) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.stat-number {
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
 /* ─── Layout ──────────────────────────────────────────────────────── */
 .container {
   max-width: 1280px;
@@ -510,3 +526,50 @@ a:hover { color: var(--accent-primary); }
 
 .tag-added { background: rgba(38, 222, 129, 0.08); border-color: rgba(38, 222, 129, 0.2); color: #26de81; }
 .tag-removed { background: rgba(255, 77, 109, 0.08); border-color: rgba(255, 77, 109, 0.2); color: #ff4d6d; }
+
+/* ─── Navigation Header ─────────────────────────────────────────── */
+.nav-header {
+  border-bottom: 1px solid var(--border);
+  background: rgba(10, 11, 15, 0.95);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 60px;
+}
+
+.nav-brand-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--text-primary);
+}
+
+.nav-logo-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #ffffff;
+  box-shadow: var(--shadow-glow);
+}
+
+.nav-brand-title {
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}

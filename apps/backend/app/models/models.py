@@ -101,7 +101,7 @@ class Analysis(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # JSON fields for complex data
-    changed_files_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    changed_files_data: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     changed_symbols: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     affected_components: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     risk_factors: Mapped[list | None] = mapped_column(JSONB, nullable=True)

@@ -13,19 +13,22 @@ Steps:
 9. Persist results
 """
 
+import asyncio
 import sys
-import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Add packages to path so we can import code-analysis
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent / "packages" / "code-analysis"))
+sys.path.insert(
+    0, str(Path(__file__).parent.parent.parent.parent.parent / "packages" / "code-analysis")
+)
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.models.models import Analysis, AnalysisStatus, PullRequest, Repository
+from app.models.models import Analysis, AnalysisStatus, PullRequest, Repository, RiskLevel
 from app.services.diff_parser import FileDiff, identify_changed_symbols, parse_patch
 from app.services.github_service import GitHubService, PRData
 from app.services.impact_analyzer import ImpactAnalyzer
@@ -38,7 +41,7 @@ settings = get_settings()
 class AnalysisPipeline:
     """
     Orchestrates the full PR analysis pipeline.
-    
+
     Designed to be called from the worker but can be called directly.
     Updates analysis status at each stage.
     """
@@ -50,8 +53,6 @@ class AnalysisPipeline:
 
     async def run(self, analysis_id: str) -> None:
         """Run the full analysis pipeline for an analysis record."""
-        from sqlalchemy import select
-
         # Load analysis with PR and repo
         stmt = select(Analysis).where(Analysis.id == analysis_id)
         result = await self._db.execute(stmt)
@@ -60,15 +61,21 @@ class AnalysisPipeline:
             logger.error("Analysis not found", analysis_id=analysis_id)
             return
 
-        stmt = select(PullRequest).where(PullRequest.id == analysis.pull_request_id)
-        pr_result = await self._db.execute(stmt)
+        pr_stmt = select(PullRequest).where(PullRequest.id == analysis.pull_request_id)
+        pr_result = await self._db.execute(pr_stmt)
         pull_request = pr_result.scalar_one_or_none()
+        if not pull_request:
+            logger.error("PullRequest not found", analysis_id=analysis_id)
+            return
 
-        stmt = select(Repository).where(Repository.id == pull_request.repository_id)
-        repo_result = await self._db.execute(stmt)
+        repo_stmt = select(Repository).where(Repository.id == pull_request.repository_id)
+        repo_result = await self._db.execute(repo_stmt)
         repository = repo_result.scalar_one_or_none()
+        if not repository:
+            logger.error("Repository not found", analysis_id=analysis_id)
+            return
 
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC).replace(tzinfo=None)
         analysis.started_at = started_at
 
         try:
@@ -83,8 +90,9 @@ class AnalysisPipeline:
             analysis.status = AnalysisStatus.FAILED
             analysis.error_message = str(e)
 
-        analysis.completed_at = datetime.now(timezone.utc)
-        analysis.duration_seconds = (analysis.completed_at - started_at).total_seconds()
+        completed_at = datetime.now(UTC).replace(tzinfo=None)
+        analysis.completed_at = completed_at
+        analysis.duration_seconds = (completed_at - started_at).total_seconds()
         await self._db.commit()
 
     async def _run_pipeline(
@@ -106,13 +114,28 @@ class AnalysisPipeline:
         await self._update_status(analysis, AnalysisStatus.PARSING)
 
         from adapters.registry import LanguageRegistry
+
         registry = LanguageRegistry()
 
         changed_file_diffs: list[FileDiff] = []
         changed_files_data: list[dict] = []
+        deleted_files: list[str] = []
 
         for f in pr_data.files:
+            lang = registry.detect_language(f.filename)
             if f.status == "removed":
+                # Track deleted files explicitly — don't silently skip
+                deleted_files.append(f.filename)
+                changed_files_data.append(
+                    {
+                        "path": f.filename,
+                        "language": lang,
+                        "status": "removed",
+                        "added_lines": 0,
+                        "removed_lines": f.deletions,
+                        "changed_symbols": ["[DELETED FILE]"],
+                    }
+                )
                 continue
             diff = parse_patch(
                 filename=f.filename,
@@ -122,22 +145,23 @@ class AnalysisPipeline:
                 deletions=f.deletions,
             )
             changed_file_diffs.append(diff)
-            lang = registry.detect_language(f.filename)
-            changed_files_data.append({
-                "path": f.filename,
-                "language": lang,
-                "status": f.status,
-                "added_lines": f.additions,
-                "removed_lines": f.deletions,
-                "changed_symbols": [],  # filled later
-            })
+            changed_files_data.append(
+                {
+                    "path": f.filename,
+                    "language": lang,
+                    "status": f.status,
+                    "added_lines": f.additions,
+                    "removed_lines": f.deletions,
+                    "changed_symbols": [],  # filled later
+                }
+            )
 
         # ─── STEP 6-8: Parse repo and build graph ────────────────────────────
         await self._update_status(analysis, AnalysisStatus.ANALYZING)
         logger.info("Parsing repository files", repo=repository.full_name)
 
-        from models.representation import RepositoryAnalysis
         from graph.code_graph import CodeGraph
+        from models.representation import RepositoryAnalysis
 
         repo_analysis = RepositoryAnalysis(root_path=f"{owner}/{name}")
         code_graph = CodeGraph()
@@ -147,9 +171,7 @@ class AnalysisPipeline:
 
         # Try to get a broader view by listing repo tree (up to 200 files)
         try:
-            tree_items = await self._github.list_repo_files(
-                owner, name, ref=pull_request.head_sha
-            )
+            tree_items = await self._github.list_repo_files(owner, name, ref=pull_request.head_sha)
             # Prioritize analyzable files, limit total
             analyzable_extensions = set(registry.supported_extensions())
             for item in tree_items[:200]:
@@ -159,20 +181,26 @@ class AnalysisPipeline:
         except Exception as e:
             logger.warning("Could not list repo tree, analyzing changed files only", error=str(e))
 
-        # Fetch and analyze files
-        for file_path in list(files_to_analyze)[:150]:  # safety cap
+        # Fetch and analyze files concurrently with bounded concurrency
+        semaphore = asyncio.Semaphore(10)
+
+        async def fetch_and_analyze(file_path: str) -> None:
             if not registry.get_analyzer(file_path):
-                continue
-            try:
-                content = await self._github.get_file_content(
-                    owner, name, file_path, ref=pull_request.head_sha
-                )
-                if content and len(content) <= settings.max_file_size_bytes:
-                    fa = registry.analyze_file(file_path, content)
-                    if fa:
-                        repo_analysis.files[file_path] = fa
-            except Exception as e:
-                logger.debug("Failed to fetch/parse file", path=file_path, error=str(e))
+                return
+            async with semaphore:
+                try:
+                    content = await self._github.get_file_content(
+                        owner, name, file_path, ref=pull_request.head_sha
+                    )
+                    if content and len(content) <= settings.max_file_size_bytes:
+                        fa = registry.analyze_file(file_path, content)
+                        if fa:
+                            repo_analysis.files[file_path] = fa
+                except Exception as e:
+                    logger.debug("Failed to fetch/parse file", path=file_path, error=str(e))
+
+        candidates = [p for p in list(files_to_analyze)[:150] if registry.get_analyzer(p)]
+        await asyncio.gather(*(fetch_and_analyze(p) for p in candidates))
 
         code_graph.build_from_analysis(repo_analysis)
         logger.info(
@@ -220,19 +248,19 @@ class AnalysisPipeline:
                 if content:
                     lines = content.splitlines()
                     for sym_name in cfd["changed_symbols"][:2]:
-                        sym = next(
-                            (s for s in fa.symbols if s.qualified_name == sym_name), None
-                        )
+                        sym = next((s for s in fa.symbols if s.qualified_name == sym_name), None)
                         if sym:
                             snippet_lines = lines[sym.start_line - 1 : sym.end_line]
-                            relevant_code.append({
-                                "file": cfd["path"],
-                                "symbol": sym_name,
-                                "language": cfd["language"],
-                                "start_line": sym.start_line,
-                                "end_line": sym.end_line,
-                                "code": "\n".join(snippet_lines[:50]),  # max 50 lines
-                            })
+                            relevant_code.append(
+                                {
+                                    "file": cfd["path"],
+                                    "symbol": sym_name,
+                                    "language": cfd["language"],
+                                    "start_line": sym.start_line,
+                                    "end_line": sym.end_line,
+                                    "code": "\n".join(snippet_lines[:50]),  # max 50 lines
+                                }
+                            )
 
         evidence = {
             "repository": {
@@ -262,9 +290,11 @@ class AnalysisPipeline:
 
         llm_result = await self._llm.analyze_pr_risk(evidence)
 
-        # ─── STEP 16: Persist results ─────────────────────────────────────────
         analysis.status = AnalysisStatus.COMPLETED
-        analysis.risk_level = llm_result.risk_level
+        try:
+            analysis.risk_level = RiskLevel(llm_result.risk_level.upper())
+        except (ValueError, KeyError):
+            analysis.risk_level = RiskLevel.MEDIUM
         analysis.summary = llm_result.summary
         analysis.changed_files_data = changed_files_data
         analysis.changed_symbols = all_changed_symbols
