@@ -12,6 +12,7 @@ import EvidenceViewer from '@/components/analysis/EvidenceViewer';
 import RiskFactorsList from '@/components/analysis/RiskFactorsList';
 import RecommendedTestsList from '@/components/analysis/RecommendedTestsList';
 import DependencySignals from '@/components/analysis/DependencySignals';
+import AffectedComponentsList from '@/components/analysis/AffectedComponentsList';
 import { isTerminalStatus, getLanguageColor } from '@/lib/utils';
 import {
   Layers,
@@ -23,6 +24,8 @@ import {
   FolderGit2,
   AlertTriangle,
   RefreshCw,
+  ArrowRight,
+  Database,
 } from 'lucide-react';
 
 interface Props {
@@ -166,16 +169,7 @@ export default function AnalysisPage({ params }: Props) {
         <PipelineProgress status={analysis.status} />
 
         {/* View Navigation Tabs */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            borderBottom: '1px solid var(--border)',
-            marginBottom: 24,
-            overflowX: 'auto',
-          }}
-        >
+        <div className="tabs-nav-bar">
           <button
             onClick={() => setActiveTab('overview')}
             style={{
@@ -298,21 +292,70 @@ export default function AnalysisPage({ params }: Props) {
         {/* TAB 1: OVERVIEW */}
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)', gap: 24, alignItems: 'start' }}>
-              {/* Left Column: Risk Factors & Impact Signals */}
+            {/* 1. Full-Width Executive Summary Banner */}
+            {analysis.summary && (
+              <div
+                className="card"
+                style={{
+                  padding: '20px 24px',
+                  background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-lg)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <div
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 6,
+                      background: 'var(--accent-glow)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--accent-secondary)',
+                    }}
+                  >
+                    <Sparkles size={15} />
+                  </div>
+                  <h2 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)' }}>
+                    Executive AI Analysis Summary
+                  </h2>
+                </div>
+
+                <p
+                  style={{
+                    fontSize: '0.925rem',
+                    lineHeight: 1.65,
+                    color: 'var(--text-primary)',
+                    whiteSpace: 'pre-line',
+                  }}
+                >
+                  {analysis.summary}
+                </p>
+              </div>
+            )}
+
+            {/* 2-Column Balanced Grid */}
+            <div className="grid-cols-2-responsive">
+              {/* Left Column: Risk Factors, Edge Cases & Affected Components */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 <RiskFactorsList
-                  summary={analysis.summary}
                   riskFactors={analysis.risk_factors}
-                  affectedComponents={analysis.affected_components}
                   edgeCases={analysis.edge_cases}
+                  showSummary={false}
+                  showAffectedComponents={false}
                 />
 
-                <DependencySignals metrics={analysis.dependency_metrics} />
+                <AffectedComponentsList affectedComponents={analysis.affected_components} />
               </div>
 
-              {/* Right Column: Recommended Tests & Coverage Warnings */}
+              {/* Right Column: Dependency Signals & Recommended Tests */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {/* 1. Dependency Metrics & Security Signals */}
+                <DependencySignals metrics={analysis.dependency_metrics} />
+
+                {/* 2. Recommended Tests & Uncovered Symbols Alert */}
                 <RecommendedTestsList
                   recommendedTests={analysis.recommended_tests}
                   missingTestCandidates={missingTests}
@@ -320,16 +363,6 @@ export default function AnalysisPage({ params }: Props) {
                 />
               </div>
             </div>
-
-            {/* Quick Preview of Retrieved Evidence */}
-            {relevantCode.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <EvidenceViewer
-                  relevantCode={relevantCode}
-                  retrievedEvidence={retrievedEvidence}
-                />
-              </div>
-            )}
           </div>
         )}
 

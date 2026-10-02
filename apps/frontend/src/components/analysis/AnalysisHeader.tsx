@@ -35,9 +35,9 @@ export default function AnalysisHeader({ analysis }: AnalysisHeaderProps) {
         boxShadow: 'var(--shadow-card)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+      <div className="analysis-header-content">
         {/* Left: PR Identity */}
-        <div style={{ flex: '1 1 500px', minWidth: 0 }}>
+        <div className="analysis-header-info">
           {/* Repo & Meta Line */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
             {repo && (
@@ -144,20 +144,8 @@ export default function AnalysisHeader({ analysis }: AnalysisHeaderProps) {
         </div>
 
         {/* Right: Risk Level & Status Card */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-end',
-            gap: 10,
-            padding: '12px 18px',
-            borderRadius: 'var(--radius-md)',
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border)',
-            minWidth: 200,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="analysis-header-risk-card">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
               Risk Assessment
             </span>

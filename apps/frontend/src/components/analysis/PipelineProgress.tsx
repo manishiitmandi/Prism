@@ -53,14 +53,7 @@ export default function PipelineProgress({ status }: PipelineProgressProps) {
         </span>
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${STEPS.length}, 1fr)`,
-          gap: 8,
-          position: 'relative',
-        }}
-      >
+      <div className="pipeline-grid-responsive" style={{ position: 'relative' }}>
         {STEPS.map((step, idx) => {
           const isDone = isCompleted || (!isFailed && currentIdx > idx);
           const isActive = !isFailed && currentIdx === idx && !isCompleted;

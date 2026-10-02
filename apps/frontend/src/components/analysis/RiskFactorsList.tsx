@@ -9,6 +9,8 @@ interface RiskFactorsListProps {
   riskFactors?: RiskFactor[] | null;
   affectedComponents?: AffectedComponent[] | null;
   edgeCases?: string[] | null;
+  showSummary?: boolean;
+  showAffectedComponents?: boolean;
 }
 
 export default function RiskFactorsList({
@@ -16,6 +18,8 @@ export default function RiskFactorsList({
   riskFactors,
   affectedComponents,
   edgeCases,
+  showSummary = true,
+  showAffectedComponents = true,
 }: RiskFactorsListProps) {
   const [expandedFactors, setExpandedFactors] = useState<Record<number, boolean>>({ 0: true, 1: true });
 
@@ -26,7 +30,7 @@ export default function RiskFactorsList({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Executive Summary Card */}
-      {summary && (
+      {showSummary && summary && (
         <div
           className="card"
           style={{
@@ -182,7 +186,7 @@ export default function RiskFactorsList({
       </div>
 
       {/* Affected Components */}
-      {affectedComponents && affectedComponents.length > 0 && (
+      {showAffectedComponents && affectedComponents && affectedComponents.length > 0 && (
         <div
           className="card"
           style={{

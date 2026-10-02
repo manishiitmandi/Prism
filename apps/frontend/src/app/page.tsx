@@ -156,13 +156,7 @@ export default function HomePage() {
           </div>
 
           {/* Metric Cards Grid */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: 16,
-            }}
-          >
+          <div className="grid-cols-4-responsive">
             <div className="card" style={{ padding: '16px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -262,7 +256,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <form onSubmit={handleQuickAnalyze} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <form onSubmit={handleQuickAnalyze} className="quick-analyzer-form" style={{ flex: '1 1 380px', justifyContent: 'flex-end' }}>
               <select
                 value={quickRepoId}
                 onChange={e => setQuickRepoId(e.target.value)}
@@ -274,7 +268,8 @@ export default function HomePage() {
                   borderRadius: 6,
                   color: 'var(--text-primary)',
                   cursor: 'pointer',
-                  minWidth: 160,
+                  flex: '1 1 180px',
+                  minWidth: 140,
                 }}
               >
                 {repos.map(r => (
@@ -290,7 +285,8 @@ export default function HomePage() {
                 value={quickPrNumber}
                 onChange={e => setQuickPrNumber(e.target.value)}
                 style={{
-                  width: 130,
+                  flex: '1 1 120px',
+                  minWidth: 100,
                   padding: '7px 12px',
                   fontSize: '0.8rem',
                   background: 'var(--bg-elevated)',
@@ -305,7 +301,7 @@ export default function HomePage() {
                 type="submit"
                 disabled={!quickPrNumber || quickAnalyzing || repos.length === 0}
                 className="btn btn-primary"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 16px', fontSize: '0.8rem' }}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '7px 16px', fontSize: '0.8rem', flexShrink: 0 }}
               >
                 {quickAnalyzing ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
                 <span>{quickAnalyzing ? 'Launching...' : 'Run Analysis'}</span>
@@ -332,7 +328,7 @@ export default function HomePage() {
           </div>
 
           {loading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+            <div className="grid-repos-responsive">
               {[1, 2].map(i => (
                 <div key={i} className="card skeleton" style={{ height: 120 }} />
               ))}
@@ -349,7 +345,7 @@ export default function HomePage() {
               </button>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
+            <div className="grid-repos-responsive">
               {repos.map(r => (
                 <Link
                   key={r.id}
@@ -443,8 +439,8 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.825rem' }}>
+              <div className="table-responsive-wrapper">
+                <table>
                   <thead>
                     <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       <th style={{ padding: '12px 18px', fontWeight: 600 }}>Pull Request</th>
@@ -477,7 +473,7 @@ export default function HomePage() {
                               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: 'var(--accent-secondary)' }}>
                                 #{prNum}
                               </span>
-                              <span style={{ fontWeight: 600, color: 'var(--text-primary)', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={title}>
+                              <span style={{ fontWeight: 600, color: 'var(--text-primary)', maxWidth: 'min(300px, 35vw)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={title}>
                                 {title}
                               </span>
                             </div>

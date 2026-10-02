@@ -49,14 +49,7 @@ export default function DependencySignals({ metrics }: DependencySignalsProps) {
       </div>
 
       {/* Metric Counters */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 12,
-          marginBottom: 18,
-        }}
-      >
+      <div className="grid-signals-responsive" style={{ marginBottom: 18 }}>
         <div style={{ background: 'var(--bg-secondary)', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
             Direct Callers

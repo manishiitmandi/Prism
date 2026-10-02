@@ -231,25 +231,18 @@ export default function RepositoryPage({ params }: Props) {
             {/* Quick Trigger Any PR Box */}
             <form
               onSubmit={handleCustomAnalyze}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                background: 'var(--bg-elevated)',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border)',
-              }}
+              className="repo-quick-trigger-form"
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <GitPullRequest size={14} style={{ color: 'var(--accent-secondary)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+                <GitPullRequest size={14} style={{ color: 'var(--accent-secondary)', flexShrink: 0 }} />
                 <input
                   type="number"
                   placeholder="PR # (e.g. 16437)"
                   value={customPrNumber}
                   onChange={e => setCustomPrNumber(e.target.value)}
                   style={{
-                    width: 140,
+                    flex: '1 1 140px',
+                    minWidth: 100,
                     padding: '6px 10px',
                     fontSize: '0.8rem',
                     background: 'var(--bg-card)',
@@ -265,7 +258,7 @@ export default function RepositoryPage({ params }: Props) {
                 type="submit"
                 disabled={!customPrNumber || analyzingPr !== null}
                 className="btn btn-primary btn-sm"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px' }}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 14px', flexShrink: 0 }}
               >
                 {analyzingPr !== null ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
                 <span>Analyze</span>
@@ -275,7 +268,7 @@ export default function RepositoryPage({ params }: Props) {
         </div>
 
         {/* 2-Column Main Layout: PRs List & Code Intelligence Sidebar */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 24, alignItems: 'start' }}>
+        <div className="grid-cols-repo-responsive">
           {/* Left Column: Active Pull Requests */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -313,17 +306,7 @@ export default function RepositoryPage({ params }: Props) {
                   return (
                     <div
                       key={pr.number}
-                      className="card hover-card"
-                      style={{
-                        padding: '16px 20px',
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 'var(--radius-md)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 16,
-                      }}
+                      className="card hover-card pr-item-card"
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
@@ -353,7 +336,7 @@ export default function RepositoryPage({ params }: Props) {
                       </div>
 
                       {/* Right: Analysis Action or Report Link */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div className="pr-item-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         {existingAnalysis ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <RiskBadge risk={existingAnalysis.risk_level} size="sm" />

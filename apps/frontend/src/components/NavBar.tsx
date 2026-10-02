@@ -127,12 +127,12 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
         </div>
 
         {/* Right: Engine Health Indicator & Architecture Status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }} suppressHydrationWarning>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }} suppressHydrationWarning>
           <div
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 8,
+              gap: 6,
               padding: '4px 10px',
               borderRadius: 100,
               background: 'var(--bg-card)',
@@ -140,7 +140,7 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
               fontSize: '0.75rem',
               color: 'var(--text-secondary)',
             }}
-            title="PRism Analysis Engine Status"
+            title={isOnline === false ? 'Backend API is currently offline' : `PRism Core ${version} connected with pgvector`}
           >
             <span
               style={{
@@ -154,7 +154,16 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
               }}
             />
             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.72rem' }}>
-              {isOnline === null ? 'Connecting...' : isOnline ? `Core ${version} · pgvector` : 'API Offline'}
+              {isOnline === null ? (
+                'Connecting...'
+              ) : isOnline ? (
+                <>
+                  <span>Core {version}</span>
+                  <span className="nav-status-details"> · pgvector</span>
+                </>
+              ) : (
+                'Offline'
+              )}
             </span>
           </div>
 
@@ -172,7 +181,7 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
               padding: '4px 8px',
             }}
           >
-            <span>GitHub</span>
+            <span className="nav-status-details">GitHub</span>
             <ArrowUpRight size={12} />
           </a>
         </div>
