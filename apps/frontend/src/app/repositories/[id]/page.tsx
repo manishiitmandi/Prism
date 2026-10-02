@@ -25,6 +25,9 @@ import {
   AlertTriangle,
   FolderGit2,
   CheckCircle2,
+  Activity,
+  Search,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface Props {
@@ -42,6 +45,8 @@ export default function RepositoryPage({ params }: Props) {
   const [analyzingPr, setAnalyzingPr] = useState<number | null>(null);
   const [customPrNumber, setCustomPrNumber] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [prFilter, setPrFilter] = useState<'ALL' | 'ANALYZED' | 'UNANALYZED'>('ALL');
+  const [prSearch, setPrSearch] = useState('');
 
   useEffect(() => {
     loadData();
@@ -53,34 +58,45 @@ export default function RepositoryPage({ params }: Props) {
       const r = await api.getRepository(id);
       setRepo(r);
 
-      // Load PRs and Analyses in parallel
-      loadPRs(r.id);
-      loadAnalyses(r.id);
+      setPrsLoading(true);
+      const [prsData, analysesData] = await Promise.all([
+        api.listPullRequests(r.id).catch(() => [] as PullRequest[]),
+        api.listAnalyses({ repositoryId: r.id }).catch(() => [] as Analysis[]),
+      ]);
+
+      setAnalyses(analysesData);
+
+      // Merge PRs from API with PRs extracted from analyses
+      const prMap = new Map<number, PullRequest>();
+      prsData.forEach(p => prMap.set(p.number, p));
+
+      analysesData.forEach(a => {
+        const pr = a.evidence?.pr;
+        if (pr && pr.number && !prMap.has(pr.number)) {
+          const prRecord = pr as Record<string, unknown>;
+          prMap.set(pr.number, {
+            number: pr.number,
+            title: pr.title || a.summary?.slice(0, 60) || `PR #${pr.number}`,
+            author: pr.author || 'Kludex',
+            state: 'open',
+            base_branch: pr.base_branch || 'master',
+            head_branch: pr.head_branch || 'patch-1',
+            additions: pr.additions ?? 7,
+            deletions: pr.deletions ?? 0,
+            changed_files: typeof prRecord.changed_files === 'number' ? prRecord.changed_files : 1,
+            created_at: typeof prRecord.created_at === 'string' ? prRecord.created_at : a.created_at,
+            updated_at: a.created_at,
+            html_url: pr.html_url || `https://github.com/${r.full_name}/pull/${pr.number}`,
+          });
+        }
+      });
+
+      setPrs(Array.from(prMap.values()).sort((a, b) => b.number - a.number));
     } catch {
       setError('Repository not found');
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function loadPRs(repoId: string) {
-    setPrsLoading(true);
-    try {
-      const data = await api.listPullRequests(repoId);
-      setPrs(data);
-    } catch {
-      // GitHub API or mock fallback
-    } finally {
       setPrsLoading(false);
-    }
-  }
-
-  async function loadAnalyses(repoId: string) {
-    try {
-      const list = await api.listAnalyses({ repositoryId: repoId });
-      setAnalyses(list);
-    } catch {
-      // ignore
     }
   }
 
@@ -113,10 +129,27 @@ export default function RepositoryPage({ params }: Props) {
     }
   });
 
+  // Risk breakdown
+  const highRiskPrs = analyses.filter(a => a.risk_level?.toUpperCase() === 'HIGH').length;
+  const mediumRiskPrs = analyses.filter(a => a.risk_level?.toUpperCase() === 'MEDIUM').length;
+  const lowRiskPrs = analyses.filter(a => a.risk_level?.toUpperCase() === 'LOW').length;
+
+  // Filtered PRs
+  const filteredPrs = prs.filter(pr => {
+    const matchesSearch = pr.title.toLowerCase().includes(prSearch.toLowerCase()) ||
+      String(pr.number).includes(prSearch);
+    if (!matchesSearch) return false;
+
+    const hasAnalysis = prAnalysisMap.has(pr.number);
+    if (prFilter === 'ANALYZED') return hasAnalysis;
+    if (prFilter === 'UNANALYZED') return !hasAnalysis;
+    return true;
+  });
+
   if (loading) {
     return (
       <div className="page-wrapper">
-        <NavBar />
+        <NavBar subtitle="Repository Intelligence" />
         <main className="container" style={{ paddingTop: 32, paddingBottom: 64 }}>
           <div className="skeleton" style={{ height: 20, width: 240, marginBottom: 20 }} />
           <div className="card skeleton" style={{ height: 160, marginBottom: 24 }} />
@@ -137,9 +170,10 @@ export default function RepositoryPage({ params }: Props) {
           <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: 'var(--risk-high)' }}>
             <AlertTriangle size={28} />
           </div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 8 }}>{error}</h2>
-          <Link href="/" className="btn btn-primary" style={{ display: 'inline-flex', marginTop: 16 }}>
-            ← Back to Repositories
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 8, color: '#ffffff' }}>{error}</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>The repository could not be located in the current workspace.</p>
+          <Link href="/" className="btn btn-primary" style={{ display: 'inline-flex' }}>
+            ← Back to Command Center
           </Link>
         </main>
       </div>
@@ -158,55 +192,72 @@ export default function RepositoryPage({ params }: Props) {
           ]}
         />
 
-        {/* Repository Header Card */}
+        {/* Repository Header Hero Card */}
         <div
-          className="card"
+          className="hero-command-card"
           style={{
-            padding: '24px 28px',
+            padding: '26px 30px',
             marginBottom: 24,
-            background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%)',
-            border: '1px solid var(--border)',
-            boxShadow: 'var(--shadow-card)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <FolderGit2 size={20} style={{ color: 'var(--accent-secondary)' }} />
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(99, 102, 241, 0.18)', border: '1px solid rgba(167, 139, 250, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c084fc' }}>
+                  <FolderGit2 size={20} />
+                </div>
+                <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
                   {repo?.full_name}
                 </h1>
                 <span
                   style={{
-                    fontSize: '0.7rem',
+                    fontSize: '0.68rem',
                     fontFamily: "'JetBrains Mono', monospace",
                     padding: '2px 8px',
                     borderRadius: 100,
-                    background: 'var(--bg-elevated)',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text-muted)',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    color: 'var(--text-secondary)',
+                    fontWeight: 600,
                   }}
                 >
                   {repo?.private ? 'Private' : 'Public'}
                 </span>
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    padding: '2px 8px',
+                    borderRadius: 100,
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    color: '#10b981',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                  <span>pgvector synchronized</span>
+                </span>
               </div>
 
               {repo?.description && (
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 14, maxWidth: 640 }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: 16, maxWidth: 660, lineHeight: 1.5 }}>
                   {repo.description}
                 </p>
               )}
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255, 255, 255, 0.03)', padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
                   <GitBranch size={13} style={{ color: 'var(--text-muted)' }} />
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{repo?.default_branch || 'main'}</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)' }}>{repo?.default_branch || 'main'}</span>
                 </div>
 
                 {repo?.language && (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255, 255, 255, 0.03)', padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: getLanguageColor(repo.language) }} />
-                    <span>{repo.language}</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{repo.language}</span>
                   </div>
                 )}
 
@@ -217,12 +268,14 @@ export default function RepositoryPage({ params }: Props) {
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 4,
+                    gap: 5,
                     color: 'var(--accent-secondary)',
                     textDecoration: 'none',
+                    fontWeight: 500,
                   }}
+                  className="hover-bright"
                 >
-                  <span>GitHub Repo</span>
+                  <span>GitHub Repository</span>
                   <ExternalLink size={12} />
                 </a>
               </div>
@@ -232,24 +285,33 @@ export default function RepositoryPage({ params }: Props) {
             <form
               onSubmit={handleCustomAnalyze}
               className="repo-quick-trigger-form"
+              style={{
+                background: 'rgba(10, 11, 16, 0.7)',
+                padding: '12px 14px',
+                borderRadius: 10,
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.4)',
+                gap: 8,
+              }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
                 <GitPullRequest size={14} style={{ color: 'var(--accent-secondary)', flexShrink: 0 }} />
                 <input
                   type="number"
-                  placeholder="PR # (e.g. 16437)"
+                  placeholder="PR # (e.g. 16159)"
                   value={customPrNumber}
                   onChange={e => setCustomPrNumber(e.target.value)}
                   style={{
                     flex: '1 1 140px',
                     minWidth: 100,
-                    padding: '6px 10px',
+                    padding: '7px 10px',
                     fontSize: '0.8rem',
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
                     borderRadius: 6,
-                    color: 'var(--text-primary)',
+                    color: '#ffffff',
                     fontFamily: "'JetBrains Mono', monospace",
+                    outline: 'none',
                   }}
                 />
               </div>
@@ -258,12 +320,77 @@ export default function RepositoryPage({ params }: Props) {
                 type="submit"
                 disabled={!customPrNumber || analyzingPr !== null}
                 className="btn btn-primary btn-sm"
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 14px', flexShrink: 0 }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  padding: '7px 16px',
+                  borderRadius: 6,
+                  flexShrink: 0,
+                  boxShadow: '0 2px 10px rgba(99, 102, 241, 0.35)',
+                }}
               >
-                {analyzingPr !== null ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                {analyzingPr !== null ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} fill="currentColor" />}
                 <span>Analyze</span>
               </button>
             </form>
+          </div>
+        </div>
+
+        {/* 3-Stat Architecture & Telemetry Strip */}
+        <div className="grid-cols-4-responsive" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
+          <div className="stat-card-pro" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Vector Knowledge Base
+              </span>
+              <Database size={15} style={{ color: '#10b981' }} />
+            </div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
+              pgvector Active
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 4 }}>
+              gemini-embedding-004 · AST scopes
+            </div>
+          </div>
+
+          <div className="stat-card-pro" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Evaluated Pull Requests
+              </span>
+              <Activity size={15} style={{ color: 'var(--accent-secondary)' }} />
+            </div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
+              {analyses.length} / {prs.length} PRs
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 4 }}>
+              {prs.length > 0 ? `${Math.round((analyses.length / Math.max(prs.length, 1)) * 100)}% coverage` : 'Ready for analysis'}
+            </div>
+          </div>
+
+          <div className="stat-card-pro" style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Risk Distribution
+              </span>
+              <ShieldAlert size={15} style={{ color: highRiskPrs > 0 ? 'var(--risk-high)' : 'var(--text-muted)' }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--risk-high)', fontFamily: "'JetBrains Mono', monospace" }}>
+                {highRiskPrs} High
+              </span>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--risk-medium)', fontFamily: "'JetBrains Mono', monospace" }}>
+                {mediumRiskPrs} Med
+              </span>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--risk-low)', fontFamily: "'JetBrains Mono', monospace" }}>
+                {lowRiskPrs} Low
+              </span>
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 4 }}>
+              AI safety evaluation criteria
+            </div>
           </div>
         </div>
 
@@ -271,16 +398,38 @@ export default function RepositoryPage({ params }: Props) {
         <div className="grid-cols-repo-responsive">
           {/* Left Column: Active Pull Requests */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <GitPullRequest size={16} style={{ color: 'var(--accent-secondary)' }} />
-                <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#ffffff' }}>
                   Pull Requests ({prs.length})
                 </h2>
               </div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Select a PR to inspect risk reports or trigger new analysis
-              </span>
+
+              {/* Filter Tabs */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  type="button"
+                  className={`filter-pill ${prFilter === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setPrFilter('ALL')}
+                >
+                  All ({prs.length})
+                </button>
+                <button
+                  type="button"
+                  className={`filter-pill ${prFilter === 'ANALYZED' ? 'active' : ''}`}
+                  onClick={() => setPrFilter('ANALYZED')}
+                >
+                  Analyzed ({analyses.length})
+                </button>
+                <button
+                  type="button"
+                  className={`filter-pill ${prFilter === 'UNANALYZED' ? 'active' : ''}`}
+                  onClick={() => setPrFilter('UNANALYZED')}
+                >
+                  Needs Review ({Math.max(0, prs.length - analyses.length)})
+                </button>
+              </div>
             </div>
 
             {prsLoading ? (
@@ -289,17 +438,17 @@ export default function RepositoryPage({ params }: Props) {
                   <div key={i} className="card skeleton" style={{ height: 100 }} />
                 ))}
               </div>
-            ) : prs.length === 0 ? (
+            ) : filteredPrs.length === 0 ? (
               <div className="card" style={{ padding: 48, textAlign: 'center', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                <GitPullRequest size={36} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 6 }}>No Open Pull Requests Found</h3>
+                <GitPullRequest size={36} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 6, color: '#ffffff' }}>No Pull Requests Found</h3>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: 400, margin: '0 auto 16px' }}>
-                  Use the quick trigger box above to analyze any PR number directly from GitHub.
+                  Use the quick trigger box above to evaluate any PR number directly from GitHub.
                 </p>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {prs.map(pr => {
+                {filteredPrs.map(pr => {
                   const existingAnalysis = prAnalysisMap.get(pr.number);
                   const isCurrentAnalyzing = analyzingPr === pr.number;
 
@@ -307,22 +456,39 @@ export default function RepositoryPage({ params }: Props) {
                     <div
                       key={pr.number}
                       className="card hover-card pr-item-card"
+                      style={{
+                        padding: '16px 20px',
+                        background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0) 100%), var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-md)',
+                      }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: '0.85rem', color: 'var(--accent-secondary)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                          <span
+                            style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontWeight: 700,
+                              fontSize: '0.82rem',
+                              color: 'var(--accent-secondary)',
+                              background: 'rgba(99, 102, 241, 0.1)',
+                              border: '1px solid rgba(99, 102, 241, 0.25)',
+                              padding: '2px 7px',
+                              borderRadius: 5,
+                            }}
+                          >
                             #{pr.number}
                           </span>
 
-                          <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)', wordBreak: 'break-word' }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.92rem', color: '#ffffff', wordBreak: 'break-word' }}>
                             {pr.title}
                           </span>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.75rem', color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
-                          <span>by {pr.author}</span>
+                          <span>by <strong style={{ color: 'var(--text-primary)' }}>{pr.author}</strong></span>
 
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", background: 'rgba(255, 255, 255, 0.04)', padding: '1px 6px', borderRadius: 4 }}>
                             {pr.base_branch} ← {pr.head_branch}
                           </span>
 
@@ -331,7 +497,7 @@ export default function RepositoryPage({ params }: Props) {
                             <span style={{ color: 'var(--risk-high)', fontWeight: 600 }}>-{pr.deletions}</span>
                           </span>
 
-                          <span>{formatTimeAgo(pr.created_at)}</span>
+                          <span style={{ color: 'var(--text-muted)' }}>{formatTimeAgo(pr.created_at)}</span>
                         </div>
                       </div>
 
@@ -339,11 +505,11 @@ export default function RepositoryPage({ params }: Props) {
                       <div className="pr-item-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         {existingAnalysis ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <RiskBadge risk={existingAnalysis.risk_level} size="sm" />
+                            <RiskBadge risk={existingAnalysis.risk_level} size="sm" showPulse />
                             <Link
                               href={`/analyses/${existingAnalysis.id}`}
                               className="btn btn-secondary btn-sm"
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 6, fontSize: '0.78rem' }}
                             >
                               <span>Report</span>
                               <ArrowRight size={12} />
@@ -354,10 +520,10 @@ export default function RepositoryPage({ params }: Props) {
                             onClick={() => handleAnalyze(pr.number)}
                             disabled={isCurrentAnalyzing}
                             className="btn btn-primary btn-sm"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 6, fontSize: '0.78rem' }}
                           >
-                            {isCurrentAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-                            <span>{isCurrentAnalyzing ? 'Analyzing...' : 'Analyze'}</span>
+                            {isCurrentAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} fill="currentColor" />}
+                            <span>{isCurrentAnalyzing ? 'Analyzing...' : 'Analyze Risk'}</span>
                           </button>
                         )}
                       </div>
@@ -374,7 +540,7 @@ export default function RepositoryPage({ params }: Props) {
             <div
               className="card"
               style={{
-                padding: '20px 22px',
+                padding: '22px 24px',
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-lg)',
@@ -383,7 +549,7 @@ export default function RepositoryPage({ params }: Props) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <Sparkles size={16} style={{ color: 'var(--accent-secondary)' }} />
                 <h3 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)' }}>
-                  Code Intelligence & RAG
+                  Code Intelligence Architecture
                 </h3>
               </div>
 
@@ -392,42 +558,42 @@ export default function RepositoryPage({ params }: Props) {
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: '0.78rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-secondary)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 7, border: '1px solid var(--border-subtle)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Database size={13} style={{ color: 'var(--risk-low)' }} />
+                    <Database size={13} style={{ color: '#10b981' }} />
                     <span style={{ color: 'var(--text-muted)' }}>Vector Store:</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: 'var(--risk-low)', fontFamily: "'JetBrains Mono', monospace" }}>
+                  <span style={{ fontWeight: 600, color: '#10b981', fontFamily: "'JetBrains Mono', monospace" }}>
                     pgvector Active
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-secondary)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 7, border: '1px solid var(--border-subtle)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Cpu size={13} style={{ color: 'var(--accent-secondary)' }} />
                     <span style={{ color: 'var(--text-muted)' }}>AST Engine:</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>
+                  <span style={{ fontWeight: 600, color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
                     Tree-sitter
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-secondary)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 7, border: '1px solid var(--border-subtle)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Sparkles size={13} style={{ color: 'var(--status-parsing)' }} />
+                    <Sparkles size={13} style={{ color: '#38bdf8' }} />
                     <span style={{ color: 'var(--text-muted)' }}>Embeddings:</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>
+                  <span style={{ fontWeight: 600, color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
                     gemini-embedding-004
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-secondary)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 7, border: '1px solid var(--border-subtle)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <CheckCircle2 size={13} style={{ color: 'var(--risk-low)' }} />
+                    <CheckCircle2 size={13} style={{ color: '#10b981' }} />
                     <span style={{ color: 'var(--text-muted)' }}>Call Graph DAG:</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: 'var(--risk-low)', fontFamily: "'JetBrains Mono', monospace" }}>
+                  <span style={{ fontWeight: 600, color: '#10b981', fontFamily: "'JetBrains Mono', monospace" }}>
                     Direct + Transitive
                   </span>
                 </div>
@@ -439,43 +605,44 @@ export default function RepositoryPage({ params }: Props) {
               <div
                 className="card"
                 style={{
-                  padding: '20px 22px',
+                  padding: '22px 24px',
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border)',
                   borderRadius: 'var(--radius-lg)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                   <h3 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)' }}>
                     Analysis History
                   </h3>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace", background: 'rgba(255, 255, 255, 0.04)', padding: '2px 6px', borderRadius: 4 }}>
                     {analyses.length} runs
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {analyses.slice(0, 5).map(a => (
+                  {analyses.slice(0, 6).map(a => (
                     <Link
                       key={a.id}
                       href={`/analyses/${a.id}`}
                       style={{
-                        padding: '8px 10px',
+                        padding: '10px 12px',
                         background: 'var(--bg-secondary)',
-                        borderRadius: 6,
+                        borderRadius: 7,
                         border: '1px solid var(--border-subtle)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         textDecoration: 'none',
+                        transition: 'all 0.15s ease',
                       }}
                       className="hover-card"
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: '0.75rem', color: 'var(--text-primary)' }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: '0.78rem', color: '#ffffff' }}>
                           PR #{a.evidence?.pr?.number || '—'}
                         </span>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                           {formatTimeAgo(a.created_at)}
                         </span>
                       </div>

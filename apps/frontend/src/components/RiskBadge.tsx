@@ -59,23 +59,27 @@ export default function RiskBadge({
         fontSize: sizeStyles.fontSize,
         fontWeight: 700,
         fontFamily: "'JetBrains Mono', monospace",
-        letterSpacing: '0.06em',
+        letterSpacing: '0.05em',
         borderRadius: 100,
         color,
         background: bg,
         border: `1px solid ${border}`,
-        boxShadow: normalized === 'HIGH' ? '0 0 12px rgba(255, 77, 109, 0.25)' : undefined,
+        boxShadow: normalized === 'HIGH'
+          ? '0 0 14px rgba(244, 63, 94, 0.25)'
+          : normalized === 'MEDIUM'
+          ? '0 0 10px rgba(245, 158, 11, 0.2)'
+          : '0 0 10px rgba(16, 185, 129, 0.15)',
         whiteSpace: 'nowrap',
       }}
     >
       {showPulse && (
         <span
           style={{
-            width: 6,
-            height: 6,
+            width: 5,
+            height: 5,
             borderRadius: '50%',
             backgroundColor: color,
-            boxShadow: `0 0 8px ${color}`,
+            boxShadow: `0 0 6px ${color}`,
             animation: normalized === 'HIGH' ? 'pulse 1.5s infinite' : undefined,
           }}
         />
