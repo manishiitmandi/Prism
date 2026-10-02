@@ -108,11 +108,77 @@ export interface GraphData {
   edges: GraphEdge[];
 }
 
+export interface RelevantCodeChunk {
+  file: string;
+  symbol: string;
+  code: string;
+  start_line: number;
+  end_line: number;
+  language?: string | null;
+  provenance: 'hybrid' | 'static_graph' | 'semantic_search' | string;
+  similarity?: number | null;
+  relevance_score?: number | null;
+  is_test?: boolean;
+}
+
+export interface RetrievedChunk {
+  file_path?: string;
+  symbol_name?: string;
+  start_line?: number;
+  end_line?: number;
+  content: string;
+  similarity?: number;
+  score?: number;
+  language?: string;
+  chunk_type?: string;
+  is_test?: boolean;
+  provenance?: string;
+}
+
+export interface AnalysisEvidence {
+  pr?: {
+    number: number;
+    title: string;
+    author: string;
+    additions: number;
+    deletions: number;
+    head_branch?: string;
+    base_branch?: string;
+    html_url?: string;
+  };
+  repository?: {
+    owner: string;
+    name: string;
+    full_name: string;
+  };
+  changed_files?: ChangedFile[];
+  changed_symbols?: string[];
+  affected_components?: AffectedComponent[];
+  dependency_metrics?: DependencyMetrics;
+  related_tests?: string[];
+  missing_test_candidates?: string[];
+  relevant_code?: RelevantCodeChunk[];
+  retrieved_evidence?: {
+    source_chunks?: RetrievedChunk[];
+    test_chunks?: RetrievedChunk[];
+    queries_used?: string[];
+  };
+  static_evidence?: {
+    changed_files?: ChangedFile[];
+    changed_symbols?: string[];
+    affected_components?: AffectedComponent[];
+    dependency_metrics?: DependencyMetrics;
+    related_tests?: string[];
+    missing_test_candidates?: string[];
+  };
+  [key: string]: unknown;
+}
+
 export interface Analysis {
   id: string;
   pull_request_id: string;
   status: string;
-  risk_level: string | null;
+  risk_level: 'HIGH' | 'MEDIUM' | 'LOW' | null;
   summary: string | null;
   error_message: string | null;
   changed_files_data: ChangedFile[] | null;
@@ -123,7 +189,7 @@ export interface Analysis {
   edge_cases: string[] | null;
   dependency_metrics: DependencyMetrics | null;
   related_tests: string[] | null;
-  evidence: Record<string, unknown> | null;
+  evidence: AnalysisEvidence | null;
   graph_data: GraphData | null;
   started_at: string | null;
   completed_at: string | null;
@@ -165,6 +231,14 @@ export const api = {
   },
 
   // Analyses
+  async listAnalyses(params?: { limit?: number; repositoryId?: string }): Promise<Analysis[]> {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.repositoryId) query.set('repository_id', params.repositoryId);
+    const qStr = query.toString();
+    return request<Analysis[]>(`/analyses${qStr ? `?${qStr}` : ''}`);
+  },
+
   async triggerAnalysis(repoId: string, prNumber: number): Promise<AnalysisStatus> {
     return request<AnalysisStatus>(
       `/repositories/${repoId}/pull-requests/${prNumber}/analyze`,

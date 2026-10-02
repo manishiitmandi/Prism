@@ -64,13 +64,24 @@ async def list_repositories(
     return [RepositoryResponse.model_validate(r) for r in repos]
 
 
+import uuid
+
+
+def _repo_filter(repo_id: str):
+    try:
+        val_uuid = uuid.UUID(repo_id)
+        return Repository.id == val_uuid
+    except (ValueError, AttributeError):
+        return (Repository.name == repo_id) | (Repository.full_name == repo_id)
+
+
 @router.get("/{repo_id}", response_model=RepositoryResponse)
 async def get_repository(
     repo_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> RepositoryResponse:
-    """Get a repository by ID."""
-    stmt = select(Repository).where(Repository.id == repo_id)
+    """Get a repository by ID, name, or full_name."""
+    stmt = select(Repository).where(_repo_filter(repo_id))
     result = await db.execute(stmt)
     repo = result.scalar_one_or_none()
     if not repo:
@@ -84,7 +95,7 @@ async def list_pull_requests(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
     """List open PRs for a repository from GitHub."""
-    stmt = select(Repository).where(Repository.id == repo_id)
+    stmt = select(Repository).where(_repo_filter(repo_id))
     result = await db.execute(stmt)
     repo = result.scalar_one_or_none()
     if not repo:

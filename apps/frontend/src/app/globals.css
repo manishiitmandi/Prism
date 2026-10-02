@@ -573,3 +573,69 @@ a:hover { color: var(--accent-primary); }
   letter-spacing: -0.02em;
   color: var(--text-primary);
 }
+
+/* ─── Interactive & Utility Enhancements ─────────────────────────── */
+.hover-card {
+  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hover-card:hover {
+  border-color: rgba(108, 99, 255, 0.45) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 24px rgba(108, 99, 255, 0.1);
+}
+
+.table-row-hover {
+  transition: background-color 0.15s ease;
+}
+
+.table-row-hover:hover {
+  background-color: var(--bg-card-hover) !important;
+}
+
+.hover-bright:hover {
+  filter: brightness(1.2);
+}
+
+.breadcrumb-link:hover {
+  color: var(--text-primary) !important;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+/* ─── React Flow Dark Theme Polish ───────────────────────────────── */
+.react-flow__renderer {
+  background: var(--bg-primary);
+}
+
+.react-flow__controls-button {
+  background: var(--bg-card) !important;
+  border-bottom: 1px solid var(--border) !important;
+  fill: var(--text-secondary) !important;
+  color: var(--text-secondary) !important;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--bg-elevated) !important;
+  fill: var(--text-primary) !important;
+}
+
+.react-flow__handle {
+  border: 1px solid var(--bg-primary) !important;
+}
+
+.react-flow__edge-text {
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* ─── Responsive Media Queries ───────────────────────────────────── */
+@media (max-width: 900px) {
+  .nav-links-group {
+    display: none !important;
+  }
+}
+

@@ -130,6 +130,27 @@ async def trigger_analysis(
     return AnalysisStatusResponse.model_validate(analysis)
 
 
+@router.get("/analyses", response_model=list[AnalysisResponse])
+async def list_analyses(
+    limit: int = 50,
+    repository_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> list[AnalysisResponse]:
+    """List recent analyses across all repositories or for a specific repository."""
+    stmt = select(Analysis).order_by(Analysis.created_at.desc()).limit(limit)
+    if repository_id:
+        stmt = (
+            select(Analysis)
+            .join(PullRequest, Analysis.pull_request_id == PullRequest.id)
+            .where(PullRequest.repository_id == repository_id)
+            .order_by(Analysis.created_at.desc())
+            .limit(limit)
+        )
+    result = await db.execute(stmt)
+    analyses = result.scalars().all()
+    return [AnalysisResponse.model_validate(a) for a in analyses]
+
+
 @router.get("/analyses/{analysis_id}", response_model=AnalysisResponse)
 async def get_analysis(
     analysis_id: str,
