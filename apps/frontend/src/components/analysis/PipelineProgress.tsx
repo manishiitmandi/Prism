@@ -10,10 +10,10 @@ interface PipelineProgressProps {
 const STEPS = [
   { key: 'QUEUED', label: 'Queued', desc: 'Job initialized' },
   { key: 'CLONING', label: 'Fetch PR', desc: 'Pulling git diff' },
-  { key: 'PARSING', label: 'Tree-sitter AST', desc: 'Multi-lang AST' },
-  { key: 'ANALYZING', label: 'Call Graph', desc: 'Impact propagation' },
-  { key: 'RETRIEVING', label: 'Hybrid RAG', desc: 'pgvector + AST chunks' },
-  { key: 'AI_ANALYSIS', label: 'LLM Reasoning', desc: 'Evidence evaluation' },
+  { key: 'PARSING', label: 'Syntax Parsing', desc: 'Code scope analysis' },
+  { key: 'ANALYZING', label: 'Call Graph', desc: 'Impact reachability' },
+  { key: 'RETRIEVING', label: 'Context Retrieval', desc: 'Semantic & code graph' },
+  { key: 'AI_ANALYSIS', label: 'Risk Evaluation', desc: 'Safety guardrails' },
   { key: 'COMPLETED', label: 'Report Ready', desc: 'Risk evaluated' },
 ];
 

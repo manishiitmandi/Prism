@@ -158,7 +158,7 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
             title={
               isOnline === false
                 ? 'PRism Backend API is currently offline'
-                : `PRism Multi-Language AST Engine ${version} connected with pgvector vector retrieval`
+                : `PRism Code Intelligence Engine ${version} · Systems Operational`
             }
           >
             <div className="nav-beacon-wrapper">
@@ -171,7 +171,7 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
                 {isOnline === null ? 'Connecting...' : isOnline ? `Core ${version}` : 'API Offline'}
               </span>
               <span className="nav-telemetry-sep">·</span>
-              <span className="nav-telemetry-tag">pgvector</span>
+              <span className="nav-telemetry-tag">{isOnline ? 'Online' : 'Offline'}</span>
             </div>
           </div>
 

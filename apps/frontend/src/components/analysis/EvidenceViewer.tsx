@@ -178,11 +178,11 @@ export default function EvidenceViewer({
                   borderRadius: 4,
                 }}
               >
-                PGVECTOR + AST
+                HYBRID RETRIEVAL
               </span>
             </div>
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-              Context grounded from semantic vector embeddings and static AST callgraph reachability
+              Context grounded from semantic embeddings and static callgraph reachability
             </p>
           </div>
         </div>

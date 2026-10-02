@@ -15,9 +15,6 @@ import {
   ExternalLink,
   Layers,
   Sparkles,
-  Database,
-  Cpu,
-  Clock,
   ArrowRight,
   Plus,
   Play,
@@ -28,6 +25,7 @@ import {
   Activity,
   Search,
   ShieldAlert,
+  ShieldCheck,
   X,
 } from 'lucide-react';
 
@@ -143,6 +141,21 @@ export default function RepositoryPage({ params }: Props) {
 
   const analyzedPrCount = prs.filter(pr => prAnalysisMap.has(pr.number)).length;
   const unanalyzedPrCount = Math.max(0, prs.length - analyzedPrCount);
+  const coveragePercent = prs.length > 0 ? Math.round((analyzedPrCount / prs.length) * 100) : 0;
+
+  // Repository Safety Index (0 - 100)
+  const safetyScore = evaluatedPrs.length > 0
+    ? Math.max(10, Math.round(100 - ((highRiskPrs * 40 + mediumRiskPrs * 15) / evaluatedPrs.length)))
+    : 100;
+
+  // Flagged PRs needing review (High and Medium risk, sorted high risk first)
+  const flaggedPrs = evaluatedPrs
+    .filter(a => a.risk_level?.toUpperCase() === 'HIGH' || a.risk_level?.toUpperCase() === 'MEDIUM')
+    .sort((a, b) => {
+      if (a.risk_level?.toUpperCase() === 'HIGH' && b.risk_level?.toUpperCase() !== 'HIGH') return -1;
+      if (b.risk_level?.toUpperCase() === 'HIGH' && a.risk_level?.toUpperCase() !== 'HIGH') return 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
 
   // Filtered PRs
   const filteredPrs = prs.filter(pr => {
@@ -248,7 +261,7 @@ export default function RepositoryPage({ params }: Props) {
                   }}
                 >
                   <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-                  <span>pgvector synchronized</span>
+                  <span>Code Graph Synced</span>
                 </span>
               </div>
 
@@ -385,20 +398,34 @@ export default function RepositoryPage({ params }: Props) {
           </div>
         </div>
 
-        {/* 3-Stat Architecture & Telemetry Strip */}
+        {/* 3-Stat Repository Health & Telemetry Strip */}
         <div className="grid-cols-4-responsive" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
           <div className="stat-card-pro" style={{ padding: '16px 18px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Vector Knowledge Base
+                Repository Safety Score
               </span>
-              <Database size={15} style={{ color: '#10b981' }} />
+              <ShieldCheck size={15} style={{ color: highRiskPrs > 0 ? 'var(--risk-high)' : '#10b981' }} />
             </div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
-              pgvector Active
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
+                {evaluatedPrs.length > 0 ? `${safetyScore}/100` : '100/100'}
+              </span>
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  color: highRiskPrs > 0 ? 'var(--risk-high)' : mediumRiskPrs > 0 ? 'var(--risk-medium)' : '#10b981',
+                }}
+              >
+                {evaluatedPrs.length === 0 ? 'Ready' : highRiskPrs > 0 ? 'Attention Needed' : mediumRiskPrs > 0 ? 'Moderate' : 'Safe'}
+              </span>
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-              gemini-embedding-004 · AST scopes
+              {evaluatedPrs.length > 0
+                ? `${lowRiskPrs} of ${evaluatedPrs.length} PRs passed all checks`
+                : 'No pull requests evaluated yet'}
             </div>
           </div>
 
@@ -413,7 +440,7 @@ export default function RepositoryPage({ params }: Props) {
               {analyzedPrCount} / {prs.length} PRs
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-              {prs.length > 0 ? `${Math.round((analyzedPrCount / Math.max(prs.length, 1)) * 100)}% coverage · ${analyses.length} total runs` : 'Ready for analysis'}
+              {prs.length > 0 ? `${coveragePercent}% coverage · ${analyses.length} total runs` : 'Ready for analysis'}
             </div>
           </div>
 
@@ -436,7 +463,7 @@ export default function RepositoryPage({ params }: Props) {
               </span>
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-              AI safety evaluation criteria
+              Across {evaluatedPrs.length} evaluated pull requests
             </div>
           </div>
         </div>
@@ -582,9 +609,9 @@ export default function RepositoryPage({ params }: Props) {
             )}
           </div>
 
-          {/* Right Column: Code Intelligence & Architecture Status */}
+          {/* Right Column: Repository Risk Intelligence & Health Overview */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* RAG & Embeddings Intelligence Card */}
+            {/* 1. Repository Risk Health Scorecard */}
             <div
               className="card"
               style={{
@@ -594,113 +621,224 @@ export default function RepositoryPage({ params }: Props) {
                 borderRadius: 'var(--radius-lg)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <Sparkles size={16} style={{ color: 'var(--accent-secondary)' }} />
-                <h3 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)' }}>
-                  Code Intelligence Architecture
-                </h3>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ShieldCheck size={16} style={{ color: highRiskPrs > 0 ? 'var(--risk-high)' : '#10b981' }} />
+                  <h3 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)' }}>
+                    Risk Health Scorecard
+                  </h3>
+                </div>
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    padding: '2px 8px',
+                    borderRadius: 100,
+                    background: highRiskPrs > 0 ? 'rgba(244, 63, 94, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                    border: highRiskPrs > 0 ? '1px solid rgba(244, 63, 94, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
+                    color: highRiskPrs > 0 ? 'var(--risk-high)' : '#10b981',
+                    fontWeight: 700,
+                  }}
+                >
+                  {evaluatedPrs.length === 0 ? 'NO RUNS' : `${safetyScore}/100 SCORE`}
+                </span>
               </div>
 
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 16 }}>
-                PRism indexes this repository using Tree-sitter multi-language AST chunking and pgvector semantic embeddings.
+              {/* Multi-segment Risk Progress Bar */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  <span>Risk Distribution</span>
+                  <span>{evaluatedPrs.length} Analyzed PR{evaluatedPrs.length !== 1 ? 's' : ''}</span>
+                </div>
+
+                <div
+                  style={{
+                    height: 8,
+                    width: '100%',
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    borderRadius: 999,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    gap: 2,
+                  }}
+                >
+                  {evaluatedPrs.length > 0 ? (
+                    <>
+                      {lowRiskPrs > 0 && (
+                        <div
+                          style={{
+                            width: `${(lowRiskPrs / evaluatedPrs.length) * 100}%`,
+                            background: 'var(--risk-low)',
+                            borderRadius: 999,
+                          }}
+                          title={`Low Risk: ${lowRiskPrs} (${Math.round((lowRiskPrs / evaluatedPrs.length) * 100)}%)`}
+                        />
+                      )}
+                      {mediumRiskPrs > 0 && (
+                        <div
+                          style={{
+                            width: `${(mediumRiskPrs / evaluatedPrs.length) * 100}%`,
+                            background: 'var(--risk-medium)',
+                            borderRadius: 999,
+                          }}
+                          title={`Medium Risk: ${mediumRiskPrs} (${Math.round((mediumRiskPrs / evaluatedPrs.length) * 100)}%)`}
+                        />
+                      )}
+                      {highRiskPrs > 0 && (
+                        <div
+                          style={{
+                            width: `${(highRiskPrs / evaluatedPrs.length) * 100}%`,
+                            background: 'var(--risk-high)',
+                            borderRadius: 999,
+                          }}
+                          title={`High Risk: ${highRiskPrs} (${Math.round((highRiskPrs / evaluatedPrs.length) * 100)}%)`}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ width: '100%', background: 'rgba(255, 255, 255, 0.08)' }} />
+                  )}
+                </div>
+              </div>
+
+              {/* Metric Mini-Pills */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
+                <div style={{ padding: '8px 10px', background: 'var(--bg-secondary)', borderRadius: 7, border: '1px solid var(--border-subtle)', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--risk-low)', fontWeight: 600 }}>Low Risk</div>
+                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
+                    {lowRiskPrs}
+                  </div>
+                </div>
+                <div style={{ padding: '8px 10px', background: 'var(--bg-secondary)', borderRadius: 7, border: '1px solid var(--border-subtle)', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--risk-medium)', fontWeight: 600 }}>Medium</div>
+                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
+                    {mediumRiskPrs}
+                  </div>
+                </div>
+                <div style={{ padding: '8px 10px', background: 'var(--bg-secondary)', borderRadius: 7, border: '1px solid var(--border-subtle)', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--risk-high)', fontWeight: 600 }}>High Risk</div>
+                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff', fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
+                    {highRiskPrs}
+                  </div>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.45, margin: 0 }}>
+                {highRiskPrs > 0
+                  ? `⚠️ ${highRiskPrs} pull request${highRiskPrs > 1 ? 's' : ''} flagged with elevated risk requiring review before merge.`
+                  : evaluatedPrs.length > 0
+                  ? '✓ All analyzed pull requests currently comply with standard safety guardrails.'
+                  : 'Run automated risk analyses on open pull requests to populate repository safety metrics.'}
               </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: '0.78rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 7, border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Database size={13} style={{ color: '#10b981' }} />
-                    <span style={{ color: 'var(--text-muted)' }}>Vector Store:</span>
-                  </div>
-                  <span style={{ fontWeight: 600, color: '#10b981', fontFamily: "'JetBrains Mono', monospace" }}>
-                    pgvector Active
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 7, border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Cpu size={13} style={{ color: 'var(--accent-secondary)' }} />
-                    <span style={{ color: 'var(--text-muted)' }}>AST Engine:</span>
-                  </div>
-                  <span style={{ fontWeight: 600, color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
-                    Tree-sitter
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 7, border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Sparkles size={13} style={{ color: '#38bdf8' }} />
-                    <span style={{ color: 'var(--text-muted)' }}>Embeddings:</span>
-                  </div>
-                  <span style={{ fontWeight: 600, color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
-                    gemini-embedding-004
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 7, border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <CheckCircle2 size={13} style={{ color: '#10b981' }} />
-                    <span style={{ color: 'var(--text-muted)' }}>Call Graph DAG:</span>
-                  </div>
-                  <span style={{ fontWeight: 600, color: '#10b981', fontFamily: "'JetBrains Mono', monospace" }}>
-                    Direct + Transitive
-                  </span>
-                </div>
-              </div>
             </div>
 
-            {/* Previous Analyses for this repo */}
-            {analyses.length > 0 && (
-              <div
-                className="card"
-                style={{
-                  padding: '22px 24px',
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-lg)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            {/* 2. Critical Attention Watchlist (Only shows High/Medium Risk PRs needing review) */}
+            <div
+              className="card"
+              style={{
+                padding: '22px 24px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-lg)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <AlertTriangle size={16} style={{ color: flaggedPrs.length > 0 ? 'var(--risk-high)' : 'var(--accent-secondary)' }} />
                   <h3 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)' }}>
-                    Analysis History
+                    Review Watchlist
                   </h3>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace", background: 'rgba(255, 255, 255, 0.04)', padding: '2px 6px', borderRadius: 4 }}>
-                    {analyses.length} runs
-                  </span>
                 </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {analyses.slice(0, 6).map(a => (
-                    <Link
-                      key={a.id}
-                      href={`/analyses/${a.id}`}
-                      style={{
-                        padding: '10px 12px',
-                        background: 'var(--bg-secondary)',
-                        borderRadius: 7,
-                        border: '1px solid var(--border-subtle)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        textDecoration: 'none',
-                        transition: 'all 0.15s ease',
-                      }}
-                      className="hover-card"
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: '0.78rem', color: '#ffffff' }}>
-                          PR #{a.evidence?.pr?.number || '—'}
-                        </span>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                          {formatTimeAgo(a.created_at)}
-                        </span>
-                      </div>
-
-                      <RiskBadge risk={a.risk_level} size="sm" />
-                    </Link>
-                  ))}
-                </div>
+                <span
+                  style={{
+                    fontSize: '0.72rem',
+                    color: flaggedPrs.length > 0 ? 'var(--risk-high)' : 'var(--text-muted)',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    background: flaggedPrs.length > 0 ? 'rgba(244, 63, 94, 0.1)' : 'rgba(255, 255, 255, 0.04)',
+                    border: flaggedPrs.length > 0 ? '1px solid rgba(244, 63, 94, 0.25)' : '1px solid var(--border-subtle)',
+                    padding: '2px 7px',
+                    borderRadius: 4,
+                    fontWeight: 700,
+                  }}
+                >
+                  {flaggedPrs.length} Flagged
+                </span>
               </div>
-            )}
+
+              {flaggedPrs.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {flaggedPrs.slice(0, 4).map(a => {
+                    const prNumber = a.evidence?.pr?.number;
+                    const prTitle = a.evidence?.pr?.title || a.summary?.slice(0, 50) || `PR #${prNumber}`;
+                    return (
+                      <Link
+                        key={a.id}
+                        href={`/analyses/${a.id}`}
+                        style={{
+                          padding: '12px 14px',
+                          background: 'rgba(244, 63, 94, 0.04)',
+                          borderRadius: 8,
+                          border: '1px solid rgba(244, 63, 94, 0.2)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                          textDecoration: 'none',
+                          transition: 'all 0.15s ease',
+                        }}
+                        className="hover-card"
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: '0.8rem', color: '#ffffff' }}>
+                              #{prNumber}
+                            </span>
+                            <RiskBadge risk={a.risk_level} size="sm" showPulse={a.risk_level?.toUpperCase() === 'HIGH'} />
+                          </div>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            {formatTimeAgo(a.created_at)}
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {prTitle}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <span style={{ fontSize: '0.7rem', color: a.risk_level?.toUpperCase() === 'HIGH' ? 'var(--risk-high)' : 'var(--risk-medium)', fontWeight: 500 }}>
+                            {a.risk_level?.toUpperCase() === 'HIGH' ? 'Critical Risk Flags' : 'Moderate Caution'}
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--accent-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                            Inspect <ArrowRight size={11} />
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: '24px 16px',
+                    textAlign: 'center',
+                    background: 'var(--bg-secondary)',
+                    borderRadius: 8,
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                    <CheckCircle2 size={18} />
+                  </div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#ffffff', marginBottom: 4 }}>
+                    {evaluatedPrs.length > 0 ? 'No Critical Warnings' : 'No Evaluated PRs'}
+                  </div>
+                  <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
+                    {evaluatedPrs.length > 0
+                      ? 'All analyzed pull requests passed without high-severity risk triggers.'
+                      : 'Analyze open pull requests to monitor elevated risks.'}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </main>

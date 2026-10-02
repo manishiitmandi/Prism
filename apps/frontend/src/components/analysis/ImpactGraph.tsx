@@ -541,10 +541,10 @@ function ImpactGraphInner({ graphData, changedSymbols }: ImpactGraphProps) {
           <Network size={24} />
         </div>
         <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
-          No AST Graph Relationships
+          No Code Graph Relationships
         </h3>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: 440, margin: '0 auto' }}>
-          This Pull Request either modifies non-code documentation/configuration files or did not produce new inter-symbol dependency edges in the Tree-sitter static AST graph.
+          This Pull Request either modifies non-code documentation/configuration files or did not produce new inter-symbol dependency edges in the static code graph.
         </p>
       </div>
     );

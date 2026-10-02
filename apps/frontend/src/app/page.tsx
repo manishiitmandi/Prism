@@ -161,7 +161,7 @@ export default function HomePage() {
                 Engineering Intelligence Command Center
               </h1>
               <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: 6, maxWidth: 640 }}>
-                Real-time AST call-graph impact telemetry, Tree-sitter code indexing &amp; RAG-grounded pull request risk intelligence.
+                Real-time code graph telemetry, semantic indexing &amp; automated pull request risk intelligence.
               </p>
             </div>
 
@@ -201,7 +201,7 @@ export default function HomePage() {
               </div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--risk-low)' }} />
-                <span>Active in Tree-sitter RAG index</span>
+                <span>Active in Code Knowledge Base</span>
               </div>
             </div>
 
@@ -273,7 +273,7 @@ export default function HomePage() {
               </div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--risk-low)' }} />
-                <span>Tree-sitter AST + pgvector + AI</span>
+                <span>Multi-Pass Risk Intelligence</span>
               </div>
             </div>
           </div>
@@ -468,7 +468,7 @@ export default function HomePage() {
               <FolderGit2 size={40} style={{ margin: '0 auto 14px', opacity: 0.25 }} />
               <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: 8, color: '#ffffff' }}>No Repositories Found</h3>
               <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 20, maxWidth: 420, margin: '0 auto 20px' }}>
-                Connect a GitHub repository to begin tracking PR risk and building the pgvector code index.
+                Connect a GitHub repository to begin tracking pull request risk and automated codebase intelligence.
               </p>
               <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
                 Connect Repository
@@ -513,7 +513,7 @@ export default function HomePage() {
                         }}
                       >
                         <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-                        <span>pgvector indexed</span>
+                        <span>Code Graph Synced</span>
                       </span>
                     </div>
 
@@ -739,7 +739,7 @@ export default function HomePage() {
                   </div>
                   <div>
                     <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#ffffff' }}>Connect GitHub Repository</h3>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Index AST scopes &amp; prepare pgvector embeddings</p>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Analyze codebase structure &amp; generate risk models</p>
                   </div>
                 </div>
                 <button
