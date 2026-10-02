@@ -47,9 +47,13 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
 
-    # Embeddings
+    # Embeddings / RAG
+    embedding_provider: Literal["openai", "gemini", "mock"] = "gemini"
     embedding_model: str = "text-embedding-3-small"
+    gemini_embedding_model: str = "gemini-embedding-001"
     embedding_dimensions: int = 1536
+    max_retrieved_chunks: int = 10
+    embedding_batch_size: int = 25
 
     # Analysis
     max_file_size_bytes: int = 500_000  # 500 KB per file

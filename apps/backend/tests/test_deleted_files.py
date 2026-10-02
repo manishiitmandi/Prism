@@ -1,6 +1,6 @@
-import pytest
-from app.services.github_service import PRData, PRFile
 from adapters.registry import LanguageRegistry
+
+from app.services.github_service import PRData, PRFile
 
 
 def test_removed_files_tracked_in_pipeline():
@@ -45,14 +45,16 @@ def test_removed_files_tracked_in_pipeline():
         lang = registry.detect_language(f.filename)
         if f.status == "removed":
             deleted_files.append(f.filename)
-            changed_files_data.append({
-                "path": f.filename,
-                "language": lang,
-                "status": "removed",
-                "added_lines": 0,
-                "removed_lines": f.deletions,
-                "changed_symbols": ["[DELETED FILE]"],
-            })
+            changed_files_data.append(
+                {
+                    "path": f.filename,
+                    "language": lang,
+                    "status": "removed",
+                    "added_lines": 0,
+                    "removed_lines": f.deletions,
+                    "changed_symbols": ["[DELETED FILE]"],
+                }
+            )
             continue
 
     assert "legacy/old_auth.py" in deleted_files

@@ -1,12 +1,11 @@
 """Pydantic schemas for API request/response validation."""
 
 from datetime import datetime
-from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
-
+from pydantic import BaseModel, ConfigDict, Field
 
 # ─── Repository Schemas ───────────────────────────────────────────────────────
+
 
 class RepositoryCreate(BaseModel):
     owner: str = Field(..., description="GitHub repository owner/org")
@@ -31,6 +30,7 @@ class RepositoryResponse(BaseModel):
 
 # ─── Pull Request Schemas ─────────────────────────────────────────────────────
 
+
 class PullRequestResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -54,8 +54,10 @@ class PullRequestResponse(BaseModel):
 
 # ─── Analysis Schemas ─────────────────────────────────────────────────────────
 
+
 class AnalyzeRequest(BaseModel):
     """Request to trigger PR analysis."""
+
     pass  # PR info comes from path params
 
 
@@ -136,12 +138,14 @@ class AnalysisStatusResponse(BaseModel):
 
 # ─── Webhook Schemas ──────────────────────────────────────────────────────────
 
+
 class WebhookResponse(BaseModel):
     message: str
     analysis_id: str | None = None
 
 
 # ─── Health ───────────────────────────────────────────────────────────────────
+
 
 class HealthResponse(BaseModel):
     status: str = "ok"
@@ -151,8 +155,10 @@ class HealthResponse(BaseModel):
 
 # ─── LLM Structured Output ───────────────────────────────────────────────────
 
+
 class LLMRiskAnalysis(BaseModel):
     """Structured output from the LLM risk analysis."""
+
     summary: str
     risk_level: str = Field(..., pattern="^(LOW|MEDIUM|HIGH)$")
     risk_factors: list[RiskFactor] = []

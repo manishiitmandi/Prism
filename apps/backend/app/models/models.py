@@ -3,20 +3,21 @@
 import enum
 import uuid
 from datetime import datetime
-from typing import Any
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
     DateTime,
     Enum,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -57,9 +58,16 @@ class Repository(Base):
     language: Mapped[str | None] = mapped_column(String(100), nullable=True)
     private: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
-    pull_requests: Mapped[list["PullRequest"]] = relationship("PullRequest", back_populates="repository")
+    pull_requests: Mapped[list["PullRequest"]] = relationship(
+        "PullRequest", back_populates="repository"
+    )
+    code_chunks: Mapped[list["CodeChunkModel"]] = relationship(
+        "CodeChunkModel", back_populates="repository", cascade="all, delete-orphan"
+    )
 
 
 class PullRequest(Base):
@@ -67,7 +75,9 @@ class PullRequest(Base):
     __table_args__ = (UniqueConstraint("repository_id", "number", name="uq_pr_repo_number"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
-    repository_id: Mapped[str] = mapped_column(String(36), ForeignKey("repositories.id"), nullable=False)
+    repository_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("repositories.id"), nullable=False
+    )
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(1024), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -82,7 +92,9 @@ class PullRequest(Base):
     changed_files: Mapped[int] = mapped_column(Integer, default=0)
     github_url: Mapped[str] = mapped_column(String(1024), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
     repository: Mapped["Repository"] = relationship("Repository", back_populates="pull_requests")
     analyses: Mapped[list["Analysis"]] = relationship("Analysis", back_populates="pull_request")
@@ -92,7 +104,9 @@ class Analysis(Base):
     __tablename__ = "analyses"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
-    pull_request_id: Mapped[str] = mapped_column(String(36), ForeignKey("pull_requests.id"), nullable=False)
+    pull_request_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("pull_requests.id"), nullable=False
+    )
     status: Mapped[AnalysisStatus] = mapped_column(
         Enum(AnalysisStatus), default=AnalysisStatus.QUEUED
     )
@@ -118,6 +132,33 @@ class Analysis(Base):
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
     pull_request: Mapped["PullRequest"] = relationship("PullRequest", back_populates="analyses")
+
+
+class CodeChunkModel(Base):
+    __tablename__ = "code_chunks"
+    __table_args__ = (Index("ix_code_chunks_repo_commit", "repository_id", "commit_sha"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    repository_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("repositories.id"), nullable=False, index=True
+    )
+    commit_sha: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    file_path: Mapped[str] = mapped_column(String(1024), nullable=False, index=True)
+    language: Mapped[str] = mapped_column(String(64), nullable=False)
+    symbol_name: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
+    symbol_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    parent_symbol: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    start_line: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_line: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    is_test: Mapped[bool] = mapped_column(Boolean, default=False)
+    chunk_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    repository: Mapped["Repository"] = relationship("Repository", back_populates="code_chunks")

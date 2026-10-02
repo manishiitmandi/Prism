@@ -1,4 +1,4 @@
-"""Code parsing and chunking."""
+"""Code chunker service proxy."""
 
 from parser.chunker import CodeChunk, SemanticCodeChunker
 

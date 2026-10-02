@@ -13,8 +13,18 @@ settings = get_settings()
 
 _SYSTEM_PROMPT = """You are a senior software engineer performing a Pull Request risk analysis.
 
+You are reviewing a Pull Request using evidence produced by a static analysis system and a retrieval system.
+
+Do not invent repository facts.
+
+Every repository-specific claim must be supported by the supplied evidence.
+
+If evidence is insufficient, say so explicitly.
+
+Use retrieved code to understand semantics, but do not assume semantic similarity means an actual dependency.
+
 CRITICAL RULES:
-1. You MUST only make repository-specific claims using the supplied evidence.
+1. You MUST distinguish between "Detected by static analysis" and "Retrieved as semantically relevant code".
 2. Every risk factor MUST reference specific file paths or symbol names from the evidence.
 3. If evidence is unavailable or insufficient, say "Insufficient evidence to determine."
 4. Do NOT invent: files, functions, dependencies, test coverage, API relationships, or database schemas.
@@ -33,26 +43,37 @@ _USER_TEMPLATE = """Analyze the following Pull Request evidence and produce a st
 - Changed files: {changed_files_count}
 - Additions: {additions}, Deletions: {deletions}
 
-## Changed Files
+==================================================
+STATIC EVIDENCE (Detected by static analysis)
+==================================================
+
+### Changed Files
 {changed_files}
 
-## Changed Symbols (detected by static analysis)
+### Changed Symbols
 {changed_symbols}
 
-## Dependency Risk Signals (deterministic, from static analysis)
+### Dependency Risk Signals
 {risk_signals}
 
-## Affected Components (from call graph traversal)
+### Affected Components (from call graph traversal)
 {affected_components}
 
-## Related Tests Found
+### Related Tests (statically linked via imports or call graph)
 {related_tests}
 
-## Missing Test Candidates (symbols with no detected test coverage)
+### Missing Test Candidates (symbols with no detected test coverage)
 {missing_test_candidates}
 
-## Relevant Code Snippets
-{code_snippets}
+==================================================
+RETRIEVED EVIDENCE (Retrieved semantically via vector search & hybrid ranking)
+==================================================
+
+### Relevant Source Code Chunks
+{retrieved_source_chunks}
+
+### Relevant Test Chunks
+{retrieved_test_chunks}
 
 ---
 Respond with ONLY a JSON object with this exact schema:
@@ -184,8 +205,58 @@ class LLMService:
             or "None identified"
         )
 
-        # Code snippets (keep short)
-        snippets_str = json.dumps(evidence.get("relevant_code", [])[:3], indent=2)[:2000]
+        # Format retrieved source chunks
+        retrieved_ev = evidence.get("retrieved_evidence", {})
+        source_chunks = retrieved_ev.get("source_chunks", [])
+        if not source_chunks:
+            source_chunks = [
+                c for c in evidence.get("relevant_code", []) if not c.get("is_test", False)
+            ]
+
+        if source_chunks:
+            formatted_sources: list[str] = []
+            for sc in source_chunks[:8]:
+                prov = str(sc.get("provenance", "semantic_search")).upper()
+                sim = sc.get("similarity")
+                sim_str = f" [sim={sim:.2f}]" if sim is not None else ""
+                f_path = sc.get("file_path") or sc.get("file", "unknown")
+                s_name = sc.get("symbol_name") or sc.get("symbol", "unknown")
+                s_line = sc.get("start_line", "?")
+                e_line = sc.get("end_line", "?")
+                lang = sc.get("language", "")
+                code = sc.get("content") or sc.get("code", "")
+                formatted_sources.append(
+                    f"#### [{prov}]{sim_str} {f_path}:{s_line}-{e_line} ({s_name})\n"
+                    f"```{lang}\n{code}\n```"
+                )
+            retrieved_sources_str = "\n\n".join(formatted_sources)
+        else:
+            retrieved_sources_str = "No semantically relevant source chunks retrieved."
+
+        # Format retrieved test chunks
+        test_chunks = retrieved_ev.get("test_chunks", [])
+        if not test_chunks:
+            test_chunks = [c for c in evidence.get("relevant_code", []) if c.get("is_test", False)]
+
+        if test_chunks:
+            formatted_tests: list[str] = []
+            for tc in test_chunks[:5]:
+                prov = str(tc.get("provenance", "semantic_search")).upper()
+                sim = tc.get("similarity")
+                sim_str = f" [sim={sim:.2f}]" if sim is not None else ""
+                f_path = tc.get("file_path") or tc.get("file", "unknown")
+                s_name = tc.get("symbol_name") or tc.get("symbol", "unknown")
+                s_line = tc.get("start_line", "?")
+                e_line = tc.get("end_line", "?")
+                lang = tc.get("language", "")
+                code = tc.get("content") or tc.get("code", "")
+                formatted_tests.append(
+                    f"#### [{prov}]{sim_str} {f_path}:{s_line}-{e_line} ({s_name})\n"
+                    f"```{lang}\n{code}\n```"
+                )
+            retrieved_tests_str = "\n\n".join(formatted_tests)
+        else:
+            retrieved_tests_str = "No semantically relevant test chunks retrieved."
 
         return _USER_TEMPLATE.format(
             repo_full_name=evidence.get("repository", {}).get("full_name", "unknown"),
@@ -201,7 +272,8 @@ class LLMService:
             affected_components=affected_str or "None detected",
             related_tests=tests_str,
             missing_test_candidates=missing_str,
-            code_snippets=snippets_str,
+            retrieved_source_chunks=retrieved_sources_str,
+            retrieved_test_chunks=retrieved_tests_str,
         )
 
     async def _call_openai(self, prompt: str) -> LLMRiskAnalysis:
@@ -308,21 +380,42 @@ class LLMService:
                     "evidence": [],
                 }
             )
-        if signals.get("tests_absent"):
+        # Account for retrieved evidence in deterministic mode
+        retrieved_ev = evidence.get("retrieved_evidence", {})
+        retrieved_tests = retrieved_ev.get("test_chunks", [])
+        if signals.get("tests_absent") and not retrieved_tests:
             risk_factors.append(
                 {
                     "title": "No related tests detected",
-                    "description": "Changed symbols have no associated test coverage in the repository.",
+                    "description": "Changed symbols have no associated test coverage in static call graph or vector retrieval.",
                     "evidence": [str(s) for s in changed_symbols[:5]],
                 }
             )
+        elif signals.get("tests_absent") and retrieved_tests:
+            risk_factors.append(
+                {
+                    "title": "Unlinked test coverage retrieved semantically",
+                    "description": "Static call graph did not link tests, but semantic vector search identified relevant test chunks.",
+                    "evidence": [
+                        f"{t.get('file_path')}:{t.get('symbol_name')}" for t in retrieved_tests[:3]
+                    ],
+                }
+            )
+            score = max(0, score - 5)  # Slight risk reduction since relevant tests were found
+
+        retrieved_sources = retrieved_ev.get("source_chunks", [])
+        rag_summary_note = (
+            f" RAG retrieved {len(retrieved_sources)} relevant source chunk(s) and {len(retrieved_tests)} test chunk(s)."
+            if (retrieved_sources or retrieved_tests)
+            else ""
+        )
 
         return LLMRiskAnalysis(
             summary=(
                 f"PR modifies {len(changed_files)} file(s) affecting "
                 f"{len(changed_symbols)} symbol(s). "
                 f"Static analysis found {signals.get('direct_dependents', 0)} "
-                f"downstream dependent(s). "
+                f"downstream dependent(s).{rag_summary_note} "
                 f"Note: LLM unavailable — this is a deterministic risk estimate."
             ),
             risk_level=risk,

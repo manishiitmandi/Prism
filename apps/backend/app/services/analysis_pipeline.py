@@ -29,10 +29,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.models.models import Analysis, AnalysisStatus, PullRequest, Repository, RiskLevel
+from app.services.code_chunker import CodeChunk, SemanticCodeChunker
 from app.services.diff_parser import FileDiff, identify_changed_symbols, parse_patch
+from app.services.embedding_service import EmbeddingService
 from app.services.github_service import GitHubService, PRData
+from app.services.hybrid_retriever import HybridRetriever
 from app.services.impact_analyzer import ImpactAnalyzer
 from app.services.llm_service import LLMService
+from app.services.vector_store import VectorStore
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -50,6 +54,10 @@ class AnalysisPipeline:
         self._db = db
         self._github = GitHubService()
         self._llm = LLMService()
+        self._chunker = SemanticCodeChunker()
+        self._embedding_service = EmbeddingService()
+        self._vector_store = VectorStore()
+        self._hybrid_retriever = HybridRetriever(self._vector_store, self._embedding_service)
 
     async def run(self, analysis_id: str) -> None:
         """Run the full analysis pipeline for an analysis record."""
@@ -183,6 +191,7 @@ class AnalysisPipeline:
 
         # Fetch and analyze files concurrently with bounded concurrency
         semaphore = asyncio.Semaphore(10)
+        file_contents: dict[str, str] = {}
 
         async def fetch_and_analyze(file_path: str) -> None:
             if not registry.get_analyzer(file_path):
@@ -193,6 +202,7 @@ class AnalysisPipeline:
                         owner, name, file_path, ref=pull_request.head_sha
                     )
                     if content and len(content) <= settings.max_file_size_bytes:
+                        file_contents[file_path] = content
                         fa = registry.analyze_file(file_path, content)
                         if fa:
                             repo_analysis.files[file_path] = fa
@@ -201,6 +211,23 @@ class AnalysisPipeline:
 
         candidates = [p for p in list(files_to_analyze)[:150] if registry.get_analyzer(p)]
         await asyncio.gather(*(fetch_and_analyze(p) for p in candidates))
+
+        # Ensure all non-removed changed files have their content and analysis available
+        for f in pr_data.files:
+            if f.status != "removed" and f.filename not in file_contents:
+                try:
+                    content = await self._github.get_file_content(
+                        owner, name, f.filename, ref=pull_request.head_sha
+                    )
+                    if content and len(content) <= settings.max_file_size_bytes:
+                        file_contents[f.filename] = content
+                        fa = registry.analyze_file(f.filename, content)
+                        if fa:
+                            repo_analysis.files[f.filename] = fa
+                except Exception as e:
+                    logger.debug(
+                        "Failed to fetch changed file content", path=f.filename, error=str(e)
+                    )
 
         code_graph.build_from_analysis(repo_analysis)
         logger.info(
@@ -234,33 +261,81 @@ class AnalysisPipeline:
             all_file_paths=list(repo_analysis.files.keys()),
         )
 
-        # ─── STEP 13: Build evidence package ─────────────────────────────────
+        # ─── STEP 13: Semantic Code Chunking & pgvector Indexing ─────────────
         await self._update_status(analysis, AnalysisStatus.RETRIEVING)
+        logger.info("Chunking repository code for semantic indexing", repo=repository.full_name)
 
-        # Collect relevant code snippets (changed symbols from changed files)
-        relevant_code: list[dict] = []
-        for cfd in changed_files_data[:5]:
-            fa = repo_analysis.files.get(cfd["path"])
-            if fa and cfd["changed_symbols"]:
-                content = await self._github.get_file_content(
-                    owner, name, cfd["path"], ref=pull_request.head_sha
+        all_chunks: list[CodeChunk] = []
+        for file_path, content in file_contents.items():
+            fa = repo_analysis.files.get(file_path)
+            chunks = self._chunker.chunk_file(file_path, content, fa)
+            all_chunks.extend(chunks)
+
+        logger.info(
+            "Semantic code chunking complete", count=len(all_chunks), repo=repository.full_name
+        )
+
+        # Index in pgvector if not already indexed for this commit SHA
+        try:
+            is_indexed = await self._vector_store.has_commit_indexed(
+                self._db, repository.id, pull_request.head_sha
+            )
+            if not is_indexed and all_chunks:
+                logger.info(
+                    "Generating embeddings for commit chunks",
+                    commit=pull_request.head_sha,
+                    count=len(all_chunks),
                 )
-                if content:
-                    lines = content.splitlines()
-                    for sym_name in cfd["changed_symbols"][:2]:
-                        sym = next((s for s in fa.symbols if s.qualified_name == sym_name), None)
-                        if sym:
-                            snippet_lines = lines[sym.start_line - 1 : sym.end_line]
-                            relevant_code.append(
-                                {
-                                    "file": cfd["path"],
-                                    "symbol": sym_name,
-                                    "language": cfd["language"],
-                                    "start_line": sym.start_line,
-                                    "end_line": sym.end_line,
-                                    "code": "\n".join(snippet_lines[:50]),  # max 50 lines
-                                }
-                            )
+                chunk_texts = [c.content for c in all_chunks]
+                embeddings = await self._embedding_service.embed_batch(chunk_texts)
+                await self._vector_store.store_chunks(
+                    self._db, repository.id, pull_request.head_sha, all_chunks, embeddings
+                )
+            else:
+                logger.info(
+                    "Commit already indexed or no chunks to embed", commit=pull_request.head_sha
+                )
+        except Exception as e:
+            logger.error(
+                "Vector store indexing failed; continuing with hybrid retrieval",
+                error=str(e),
+                commit=pull_request.head_sha,
+            )
+
+        # ─── STEP 14: Contextual Hybrid Retrieval ─────────────────────────────
+        logger.info("Executing contextual hybrid retrieval", repo=repository.full_name)
+        pr_description = pull_request.description or pr_data.body or ""
+        hybrid_result = await self._hybrid_retriever.retrieve(
+            db=self._db,
+            repository_id=repository.id,
+            commit_sha=pull_request.head_sha,
+            pr_title=pull_request.title,
+            pr_body=pr_description,
+            changed_files=[f.filename for f in pr_data.files],
+            changed_symbols=all_changed_symbols,
+            affected_components=impact.affected_components,
+            related_tests=impact.related_tests,
+            in_memory_chunks=all_chunks,
+            max_source_chunks=settings.max_retrieved_chunks,
+            max_test_chunks=5,
+        )
+
+        # Build relevant_code for UI rendering (all top ranked retrieved chunks)
+        relevant_code: list[dict] = [
+            {
+                "file": c.file_path,
+                "symbol": c.symbol_name,
+                "language": c.metadata.get("language") or Path(c.file_path).suffix.lstrip("."),
+                "start_line": c.start_line,
+                "end_line": c.end_line,
+                "code": c.content,
+                "provenance": c.provenance,
+                "relevance_score": c.relevance_score,
+                "similarity": c.similarity,
+                "is_test": c.is_test,
+            }
+            for c in hybrid_result.all_chunks
+        ]
 
         evidence = {
             "repository": {
@@ -275,6 +350,22 @@ class AnalysisPipeline:
                 "additions": pr_data.additions,
                 "deletions": pr_data.deletions,
             },
+            # STATIC EVIDENCE (Detected by static analysis)
+            "static_evidence": {
+                "changed_files": changed_files_data,
+                "changed_symbols": all_changed_symbols,
+                "affected_components": impact.affected_components,
+                "dependency_metrics": impact.dependency_metrics,
+                "related_tests": impact.related_tests,
+                "missing_test_candidates": impact.missing_test_candidates,
+            },
+            # RETRIEVED EVIDENCE (From pgvector semantic search & hybrid ranking)
+            "retrieved_evidence": {
+                "source_chunks": [c.to_dict() for c in hybrid_result.source_chunks],
+                "test_chunks": [c.to_dict() for c in hybrid_result.test_chunks],
+                "queries_used": hybrid_result.queries_used,
+            },
+            # Top-level backwards compatibility for existing schemas/UI
             "changed_files": changed_files_data,
             "changed_symbols": all_changed_symbols,
             "affected_components": impact.affected_components,

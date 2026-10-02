@@ -6,11 +6,11 @@ from pathlib import Path
 try:
     import tree_sitter_go as tsgo
     from tree_sitter import Language, Node, Parser
+
     TREESITTER_AVAILABLE = True
 except ImportError:
     TREESITTER_AVAILABLE = False
 
-from adapters.base import LanguageAnalyzer
 from models.representation import (
     FileAnalysis,
     Relationship,
@@ -19,16 +19,18 @@ from models.representation import (
     SymbolKind,
 )
 
+from adapters.base import LanguageAnalyzer
+
 
 def _node_text(node: "Node", source: bytes) -> str:
-    return source[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+    return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
 
 class GoAnalyzer(LanguageAnalyzer):
     """Analyzes Go source files using Tree-sitter."""
 
     def __init__(self) -> None:
-        self._parser: "Parser | None" = None
+        self._parser: Parser | None = None
         if TREESITTER_AVAILABLE:
             try:
                 self._parser = Parser(Language(tsgo.language()))
@@ -69,9 +71,7 @@ class GoAnalyzer(LanguageAnalyzer):
 
         return analysis
 
-    def _walk(
-        self, node: "Node", source: bytes, file_path: str, analysis: FileAnalysis
-    ) -> None:
+    def _walk(self, node: "Node", source: bytes, file_path: str, analysis: FileAnalysis) -> None:
         if node.type == "import_declaration":
             for child in node.children:
                 if child.type == "import_spec_list":

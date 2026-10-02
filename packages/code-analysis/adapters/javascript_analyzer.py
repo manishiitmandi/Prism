@@ -7,11 +7,11 @@ try:
     import tree_sitter_javascript as tsjavascript
     import tree_sitter_typescript as tstypescript
     from tree_sitter import Language, Node, Parser
+
     TREESITTER_AVAILABLE = True
 except ImportError:
     TREESITTER_AVAILABLE = False
 
-from adapters.base import LanguageAnalyzer
 from models.representation import (
     FileAnalysis,
     Relationship,
@@ -20,9 +20,11 @@ from models.representation import (
     SymbolKind,
 )
 
+from adapters.base import LanguageAnalyzer
+
 
 def _node_text(node: "Node", source: bytes) -> str:
-    return source[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+    return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
 
 def _find_children_of_type(node: "Node", type_name: str) -> list["Node"]:
@@ -38,7 +40,7 @@ class JavaScriptAnalyzer(LanguageAnalyzer):
 
     def __init__(self, typescript: bool = False) -> None:
         self._typescript = typescript
-        self._parser: "Parser | None" = None
+        self._parser: Parser | None = None
         if TREESITTER_AVAILABLE:
             try:
                 if typescript:

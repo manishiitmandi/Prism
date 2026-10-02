@@ -26,7 +26,7 @@ async def github_webhook(
 ) -> WebhookResponse:
     """
     Receive GitHub webhook events.
-    
+
     Handles: pull_request opened/synchronize/reopened
     Returns 202 immediately; analysis runs in background.
     """
@@ -82,10 +82,11 @@ async def github_webhook(
         await db.flush()
 
     # Trigger analysis (reuse the analyses endpoint logic)
-    from app.api.v1.analyses import _run_analysis_background
-    from app.models.models import Analysis, AnalysisStatus, PullRequest
-    from app.core.config import get_settings
     import uuid
+
+    from app.api.v1.analyses import _run_analysis_background
+    from app.core.config import get_settings
+    from app.models.models import Analysis, AnalysisStatus, PullRequest
 
     # Find or create PR
     stmt = select(PullRequest).where(

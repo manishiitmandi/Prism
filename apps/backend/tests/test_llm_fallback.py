@@ -1,6 +1,5 @@
-import pytest
-from app.services.llm_service import LLMService
 from app.schemas.schemas import LLMRiskAnalysis, RiskFactor
+from app.services.llm_service import LLMService
 
 
 def test_deterministic_fallback_basic():

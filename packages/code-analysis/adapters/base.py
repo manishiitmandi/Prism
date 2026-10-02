@@ -9,7 +9,7 @@ from models.representation import FileAnalysis
 class LanguageAnalyzer(ABC):
     """
     Abstract analyzer that each language adapter must implement.
-    
+
     Responsibilities:
     - extract symbols (functions, classes, methods, variables)
     - extract imports
@@ -35,7 +35,7 @@ class LanguageAnalyzer(ABC):
     def analyze_file(self, file_path: str, source_code: str) -> FileAnalysis:
         """
         Parse source code and produce a FileAnalysis.
-        
+
         Must never raise — return FileAnalysis with parse_error set on failure.
         """
         ...

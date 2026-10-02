@@ -1,14 +1,13 @@
 """Language registry — detects language and routes to the right analyzer."""
 
 from pathlib import Path
-from typing import ClassVar
+
+from models.representation import FileAnalysis
 
 from adapters.base import LanguageAnalyzer
 from adapters.go_analyzer import GoAnalyzer
 from adapters.javascript_analyzer import JavaScriptAnalyzer, TypeScriptAnalyzer
 from adapters.python_analyzer import PythonAnalyzer
-from models.representation import FileAnalysis
-
 
 _EXTENSION_TO_LANGUAGE: dict[str, str] = {
     ".py": "python",
@@ -34,7 +33,7 @@ _EXTENSION_TO_LANGUAGE: dict[str, str] = {
 class LanguageRegistry:
     """
     Central registry for language analyzers.
-    
+
     Usage:
         registry = LanguageRegistry()
         analyzer = registry.get_analyzer("payments/service.py")

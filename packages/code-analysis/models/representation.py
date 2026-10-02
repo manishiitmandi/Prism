@@ -33,14 +33,15 @@ class RelationshipKind(str, Enum):
 @dataclass
 class Symbol:
     """A named code entity (function, class, method, etc.)."""
+
     name: str
-    qualified_name: str           # e.g. "PaymentService.process_payment"
+    qualified_name: str  # e.g. "PaymentService.process_payment"
     kind: SymbolKind
     file_path: str
     start_line: int
     end_line: int
     language: str
-    parent: str | None = None     # qualified name of containing symbol
+    parent: str | None = None  # qualified name of containing symbol
     is_test: bool = False
     is_public: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -49,8 +50,9 @@ class Symbol:
 @dataclass
 class Relationship:
     """A directed relationship between two symbols or files."""
-    source: str   # qualified name or file path
-    target: str   # qualified name or file path
+
+    source: str  # qualified name or file path
+    target: str  # qualified name or file path
     kind: RelationshipKind
     file_path: str | None = None
     line: int | None = None
@@ -60,11 +62,12 @@ class Relationship:
 @dataclass
 class FileAnalysis:
     """Complete analysis result for a single file."""
+
     path: str
     language: str
     symbols: list[Symbol] = field(default_factory=list)
     relationships: list[Relationship] = field(default_factory=list)
-    imports: list[str] = field(default_factory=list)    # raw import paths
+    imports: list[str] = field(default_factory=list)  # raw import paths
     is_test_file: bool = False
     parse_error: str | None = None
 
@@ -72,6 +75,7 @@ class FileAnalysis:
 @dataclass
 class RepositoryAnalysis:
     """Complete parsed representation of a repository."""
+
     root_path: str
     files: dict[str, FileAnalysis] = field(default_factory=dict)  # path -> FileAnalysis
 

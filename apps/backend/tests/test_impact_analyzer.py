@@ -1,4 +1,3 @@
-import pytest
 from graph.code_graph import CodeGraph
 from models.representation import (
     FileAnalysis,
@@ -8,6 +7,7 @@ from models.representation import (
     Symbol,
     SymbolKind,
 )
+
 from app.services.impact_analyzer import ImpactAnalyzer
 
 

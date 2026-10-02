@@ -1,16 +1,15 @@
 """Python language analyzer using Tree-sitter."""
 
-import sys
 from pathlib import Path
 
 try:
     import tree_sitter_python as tspython
     from tree_sitter import Language, Node, Parser
+
     TREESITTER_AVAILABLE = True
 except ImportError:
     TREESITTER_AVAILABLE = False
 
-from adapters.base import LanguageAnalyzer
 from models.representation import (
     FileAnalysis,
     Relationship,
@@ -19,9 +18,11 @@ from models.representation import (
     SymbolKind,
 )
 
+from adapters.base import LanguageAnalyzer
+
 
 def _node_text(node: "Node", source: bytes) -> str:
-    return source[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+    return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
 
 def _get_child_by_type(node: "Node", type_name: str) -> "Node | None":
@@ -35,7 +36,7 @@ class PythonAnalyzer(LanguageAnalyzer):
     """Analyzes Python source files using Tree-sitter."""
 
     def __init__(self) -> None:
-        self._parser: "Parser | None" = None
+        self._parser: Parser | None = None
         if TREESITTER_AVAILABLE:
             self._parser = Parser(Language(tspython.language()))
 
@@ -211,9 +212,7 @@ class PythonAnalyzer(LanguageAnalyzer):
         kind = SymbolKind.METHOD if parent_name else SymbolKind.FUNCTION
 
         is_test = (
-            func_name.startswith("test_")
-            or func_name.startswith("test")
-            and len(func_name) > 4
+            func_name.startswith("test_") or func_name.startswith("test") and len(func_name) > 4
         ) and analysis.is_test_file
 
         symbol = Symbol(

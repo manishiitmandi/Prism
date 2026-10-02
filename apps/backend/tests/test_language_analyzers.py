@@ -3,16 +3,13 @@
 import sys
 from pathlib import Path
 
-import pytest
-
 # Add packages to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "packages" / "code-analysis"))
 
+from adapters.javascript_analyzer import JavaScriptAnalyzer
 from adapters.python_analyzer import PythonAnalyzer
-from adapters.javascript_analyzer import JavaScriptAnalyzer, TypeScriptAnalyzer
 from adapters.registry import LanguageRegistry
 from models.representation import SymbolKind
-
 
 PYTHON_CODE = '''
 import os
@@ -40,7 +37,7 @@ def standalone_function(x: int) -> int:
     return x * 2
 '''
 
-JAVASCRIPT_CODE = '''
+JAVASCRIPT_CODE = """
 import { PaymentService } from './payment-service';
 
 export class OrderService {
@@ -55,7 +52,7 @@ export class OrderService {
 export function standaloneHelper(x) {
   return x * 2;
 }
-'''
+"""
 
 
 class TestPythonAnalyzer:

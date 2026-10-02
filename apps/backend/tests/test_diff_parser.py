@@ -1,19 +1,20 @@
 """Tests for the diff parser service."""
 
-import pytest
-from app.services.diff_parser import FileDiff, parse_patch, identify_changed_symbols
 from models.representation import Symbol, SymbolKind
 
+from app.services.diff_parser import identify_changed_symbols, parse_patch
 
-SAMPLE_PATCH = """@@ -20,7 +20,9 @@ class PaymentService:
- 
-     def process_payment(self, amount: float, currency: str) -> dict:
--        return self._gateway.charge(amount)
-+        if not self._validate_currency(currency):
-+            raise ValueError(f"Unsupported currency: {currency}")
-+        return self._gateway.charge(amount, currency)
- 
-     def _validate_currency(self, currency: str) -> bool:"""
+SAMPLE_PATCH = (
+    "@@ -20,7 +20,9 @@ class PaymentService:\n"
+    " \n"
+    "     def process_payment(self, amount: float, currency: str) -> dict:\n"
+    "-        return self._gateway.charge(amount)\n"
+    '+        if not self._validate_currency(currency):\n'
+    '+            raise ValueError(f"Unsupported currency: {currency}")\n'
+    "+        return self._gateway.charge(amount, currency)\n"
+    " \n"
+    "     def _validate_currency(self, currency: str) -> bool:"
+)
 
 
 def test_parse_patch_basic():

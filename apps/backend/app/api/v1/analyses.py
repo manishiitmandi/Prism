@@ -1,7 +1,6 @@
 """Analysis API endpoints."""
 
 import uuid
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
@@ -20,19 +19,22 @@ logger = get_logger(__name__)
 async def _run_analysis_background(analysis_id: str, db_url: str) -> None:
     """Background task that runs the full analysis pipeline."""
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
     from app.services.analysis_pipeline import AnalysisPipeline
 
     engine = create_async_engine(db_url)
-    SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+    session_local = async_sessionmaker(engine, expire_on_commit=False)
 
     try:
-        async with SessionLocal() as session:
+        async with session_local() as session:
             pipeline = AnalysisPipeline(session)
             await pipeline.run(analysis_id)
     except Exception as e:
-        logger.error("Unhandled exception in background analysis", analysis_id=analysis_id, error=str(e))
+        logger.error(
+            "Unhandled exception in background analysis", analysis_id=analysis_id, error=str(e)
+        )
         try:
-            async with SessionLocal() as err_session:
+            async with session_local() as err_session:
                 stmt = select(Analysis).where(Analysis.id == analysis_id)
                 res = await err_session.execute(stmt)
                 rec = res.scalar_one_or_none()
@@ -41,7 +43,11 @@ async def _run_analysis_background(analysis_id: str, db_url: str) -> None:
                     rec.error_message = f"Background pipeline error: {str(e)}"
                     await err_session.commit()
         except Exception as inner_e:
-            logger.error("Failed to update analysis status to FAILED", analysis_id=analysis_id, error=str(inner_e))
+            logger.error(
+                "Failed to update analysis status to FAILED",
+                analysis_id=analysis_id,
+                error=str(inner_e),
+            )
     finally:
         await engine.dispose()
 
@@ -112,6 +118,7 @@ async def trigger_analysis(
 
     # Schedule background task
     from app.core.config import get_settings
+
     settings = get_settings()
     background_tasks.add_task(
         _run_analysis_background,

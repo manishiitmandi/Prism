@@ -4,14 +4,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import networkx as nx
-
-from models.representation import RelationshipKind, RepositoryAnalysis, Symbol
+from models.representation import RepositoryAnalysis
 
 
 @dataclass
 class GraphNode:
     id: str
-    kind: str     # "file", "function", "class", "method", "test"
+    kind: str  # "file", "function", "class", "method", "test"
     file_path: str
     language: str | None = None
     start_line: int | None = None
@@ -23,10 +22,10 @@ class GraphNode:
 class CodeGraph:
     """
     Language-agnostic dependency graph.
-    
+
     Nodes = files, classes, functions, methods
     Edges = CALLS, IMPORTS, DEPENDS_ON, EXTENDS, IMPLEMENTS, TESTS
-    
+
     Uses NetworkX DiGraph under the hood.
     """
 
@@ -186,14 +185,8 @@ class CodeGraph:
                 all_nodes.update(self._graph.successors(nid))
             subgraph = self._graph.subgraph(all_nodes)
 
-        nodes = [
-            {"id": n, **dict(subgraph.nodes[n])}
-            for n in subgraph.nodes
-        ]
-        edges = [
-            {"source": u, "target": v, **dict(d)}
-            for u, v, d in subgraph.edges(data=True)
-        ]
+        nodes = [{"id": n, **dict(subgraph.nodes[n])} for n in subgraph.nodes]
+        edges = [{"source": u, "target": v, **dict(d)} for u, v, d in subgraph.edges(data=True)]
         return {"nodes": nodes, "edges": edges}
 
     @property
