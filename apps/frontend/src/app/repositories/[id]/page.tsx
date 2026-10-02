@@ -28,6 +28,7 @@ import {
   Activity,
   Search,
   ShieldAlert,
+  X,
 } from 'lucide-react';
 
 interface Props {
@@ -45,6 +46,7 @@ export default function RepositoryPage({ params }: Props) {
   const [analyzingPr, setAnalyzingPr] = useState<number | null>(null);
   const [customPrNumber, setCustomPrNumber] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [triggerError, setTriggerError] = useState<string | null>(null);
   const [prFilter, setPrFilter] = useState<'ALL' | 'ANALYZED' | 'UNANALYZED'>('ALL');
   const [prSearch, setPrSearch] = useState('');
 
@@ -103,20 +105,24 @@ export default function RepositoryPage({ params }: Props) {
   async function handleAnalyze(prNumber: number) {
     if (!repo) return;
     setAnalyzingPr(prNumber);
+    setTriggerError(null);
     try {
       const result = await api.triggerAnalysis(repo.id, prNumber);
       router.push(`/analyses/${result.id}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to trigger analysis');
+      setTriggerError(err instanceof Error ? err.message : `Pull request #${prNumber} does not exist on this repository.`);
       setAnalyzingPr(null);
     }
   }
 
   const handleCustomAnalyze = (e: React.FormEvent) => {
     e.preventDefault();
+    setTriggerError(null);
     const num = parseInt(customPrNumber.trim(), 10);
     if (!isNaN(num) && num > 0) {
       handleAnalyze(num);
+    } else {
+      setTriggerError('Please enter a valid pull request number.');
     }
   };
 
@@ -129,10 +135,14 @@ export default function RepositoryPage({ params }: Props) {
     }
   });
 
-  // Risk breakdown
-  const highRiskPrs = analyses.filter(a => a.risk_level?.toUpperCase() === 'HIGH').length;
-  const mediumRiskPrs = analyses.filter(a => a.risk_level?.toUpperCase() === 'MEDIUM').length;
-  const lowRiskPrs = analyses.filter(a => a.risk_level?.toUpperCase() === 'LOW').length;
+  // Deduplicated risk breakdown based on latest analysis per unique PR
+  const evaluatedPrs = Array.from(prAnalysisMap.values());
+  const highRiskPrs = evaluatedPrs.filter(a => a.risk_level?.toUpperCase() === 'HIGH').length;
+  const mediumRiskPrs = evaluatedPrs.filter(a => a.risk_level?.toUpperCase() === 'MEDIUM').length;
+  const lowRiskPrs = evaluatedPrs.filter(a => a.risk_level?.toUpperCase() === 'LOW').length;
+
+  const analyzedPrCount = prs.filter(pr => prAnalysisMap.has(pr.number)).length;
+  const unanalyzedPrCount = Math.max(0, prs.length - analyzedPrCount);
 
   // Filtered PRs
   const filteredPrs = prs.filter(pr => {
@@ -282,59 +292,96 @@ export default function RepositoryPage({ params }: Props) {
             </div>
 
             {/* Quick Trigger Any PR Box */}
-            <form
-              onSubmit={handleCustomAnalyze}
-              className="repo-quick-trigger-form"
-              style={{
-                background: 'rgba(10, 11, 16, 0.7)',
-                padding: '12px 14px',
-                borderRadius: 10,
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.4)',
-                gap: 8,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
-                <GitPullRequest size={14} style={{ color: 'var(--accent-secondary)', flexShrink: 0 }} />
-                <input
-                  type="number"
-                  placeholder="PR # (e.g. 16159)"
-                  value={customPrNumber}
-                  onChange={e => setCustomPrNumber(e.target.value)}
-                  style={{
-                    flex: '1 1 140px',
-                    minWidth: 100,
-                    padding: '7px 10px',
-                    fontSize: '0.8rem',
-                    background: 'var(--bg-elevated)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: 6,
-                    color: '#ffffff',
-                    fontFamily: "'JetBrains Mono', monospace",
-                    outline: 'none',
-                  }}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={!customPrNumber || analyzingPr !== null}
-                className="btn btn-primary btn-sm"
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+              <form
+                onSubmit={handleCustomAnalyze}
+                className="repo-quick-trigger-form"
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '7px 16px',
-                  borderRadius: 6,
-                  flexShrink: 0,
-                  boxShadow: '0 2px 10px rgba(99, 102, 241, 0.35)',
+                  background: 'rgba(10, 11, 16, 0.7)',
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  border: triggerError ? '1px solid rgba(244, 63, 94, 0.45)' : '1px solid rgba(255, 255, 255, 0.08)',
+                  boxShadow: triggerError ? '0 0 16px rgba(244, 63, 94, 0.2)' : 'inset 0 1px 2px rgba(0, 0, 0, 0.4)',
+                  gap: 8,
                 }}
               >
-                {analyzingPr !== null ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} fill="currentColor" />}
-                <span>Analyze</span>
-              </button>
-            </form>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+                  <GitPullRequest size={14} style={{ color: 'var(--accent-secondary)', flexShrink: 0 }} />
+                  <input
+                    type="number"
+                    placeholder="PR # (e.g. 16159)"
+                    value={customPrNumber}
+                    onChange={e => {
+                      setCustomPrNumber(e.target.value);
+                      if (triggerError) setTriggerError(null);
+                    }}
+                    style={{
+                      flex: '1 1 140px',
+                      minWidth: 100,
+                      padding: '7px 10px',
+                      fontSize: '0.8rem',
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: 6,
+                      color: '#ffffff',
+                      fontFamily: "'JetBrains Mono', monospace",
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!customPrNumber || analyzingPr !== null}
+                  className="btn btn-primary btn-sm"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    padding: '7px 16px',
+                    borderRadius: 6,
+                    flexShrink: 0,
+                    boxShadow: '0 2px 10px rgba(99, 102, 241, 0.35)',
+                  }}
+                >
+                  {analyzingPr !== null ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} fill="currentColor" />}
+                  <span>Analyze</span>
+                </button>
+              </form>
+
+              {triggerError && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    background: 'rgba(244, 63, 94, 0.12)',
+                    border: '1px solid rgba(244, 63, 94, 0.35)',
+                    color: 'var(--risk-high)',
+                    fontSize: '0.78rem',
+                    maxWidth: 380,
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                    <span>{triggerError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTriggerError(null)}
+                    style={{ background: 'none', border: 'none', color: 'var(--risk-high)', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}
+                    title="Dismiss"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -363,10 +410,10 @@ export default function RepositoryPage({ params }: Props) {
               <Activity size={15} style={{ color: 'var(--accent-secondary)' }} />
             </div>
             <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
-              {analyses.length} / {prs.length} PRs
+              {analyzedPrCount} / {prs.length} PRs
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-              {prs.length > 0 ? `${Math.round((analyses.length / Math.max(prs.length, 1)) * 100)}% coverage` : 'Ready for analysis'}
+              {prs.length > 0 ? `${Math.round((analyzedPrCount / Math.max(prs.length, 1)) * 100)}% coverage · ${analyses.length} total runs` : 'Ready for analysis'}
             </div>
           </div>
 
@@ -420,14 +467,15 @@ export default function RepositoryPage({ params }: Props) {
                   className={`filter-pill ${prFilter === 'ANALYZED' ? 'active' : ''}`}
                   onClick={() => setPrFilter('ANALYZED')}
                 >
-                  Analyzed ({analyses.length})
+                  Analyzed ({analyzedPrCount})
                 </button>
                 <button
                   type="button"
                   className={`filter-pill ${prFilter === 'UNANALYZED' ? 'active' : ''}`}
                   onClick={() => setPrFilter('UNANALYZED')}
+                  title="Pull requests awaiting risk analysis"
                 >
-                  Needs Review ({Math.max(0, prs.length - analyses.length)})
+                  Pending Analysis ({unanalyzedPrCount})
                 </button>
               </div>
             </div>

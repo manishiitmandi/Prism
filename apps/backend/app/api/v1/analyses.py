@@ -76,7 +76,11 @@ async def trigger_analysis(
     try:
         pr_data = await github.get_pull_request(repository.owner, repository.name, pr_number)
     except Exception as e:
-        raise HTTPException(status_code=404, detail=f"PR not found: {e}")
+        logger.warning("PR not found on GitHub", owner=repository.owner, repo=repository.name, pr=pr_number, error=str(e))
+        raise HTTPException(
+            status_code=404,
+            detail=f"Pull request #{pr_number} does not exist on {repository.full_name}."
+        )
 
     # Find or create PR record
     stmt = select(PullRequest).where(
