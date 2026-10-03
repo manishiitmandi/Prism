@@ -217,20 +217,6 @@ async def email_register(
     await db.commit()
     await db.refresh(user)
 
-    # Pin repositories
-    repo_stmt = select(Repository).limit(2)
-    repo_res = await db.execute(repo_stmt)
-    for r in repo_res.scalars().all():
-        db.add(
-            UserRepository(
-                user_id=user.id,
-                repository_id=r.id,
-                role="tracked_oss",
-                is_pinned=True,
-            )
-        )
-    await db.commit()
-
     token = create_access_token(user.id, expires_delta=timedelta(days=7))
     response.set_cookie(
         key="prism_session",

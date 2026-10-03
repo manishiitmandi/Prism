@@ -86,7 +86,7 @@ export function getNodeKindIcon(kind: string): string {
     case 'function': return 'ƒ';
     case 'method': return 'm';
     case 'class': return 'C';
-    case 'file': return '📄';
+    case 'file': return '≡';
     case 'test': return '✓';
     default: return '◆';
   }

@@ -1,15 +1,17 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import SignInCard from '@/components/auth/SignInCard';
-import { Shield, ArrowLeft, GitPullRequest, GitBranch, Cpu, CheckCircle2 } from 'lucide-react';
+import { Shield, ArrowLeft } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isAuthenticated, loading } = useAuth();
+  const initialMode = searchParams.get('mode') === 'register' ? 'register' : 'signin';
 
   useEffect(() => {
     if (!loading && isAuthenticated) {
@@ -141,7 +143,7 @@ export default function LoginPage() {
         }}
       >
         <div style={{ width: '100%', maxWidth: 460 }}>
-          <SignInCard onSuccess={() => router.push('/dashboard')} />
+          <SignInCard initialMode={initialMode} onSuccess={() => router.push('/dashboard')} />
         </div>
       </main>
 
@@ -158,5 +160,13 @@ export default function LoginPage() {
         PRism Intelligence Platform · End-to-end pull request risk telemetry &amp; code understanding
       </footer>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#07090e' }} />}>
+      <LoginContent />
+    </Suspense>
   );
 }

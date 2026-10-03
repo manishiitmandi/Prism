@@ -5,6 +5,7 @@ import { api, Repository, PullRequest, Analysis } from '@/lib/api';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import NavBar from '@/components/NavBar';
+import Footer from '@/components/Footer';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import RiskBadge from '@/components/RiskBadge';
 import StatusBadge from '@/components/StatusBadge';
@@ -210,7 +211,7 @@ export default function RepositoryPage({ params }: Props) {
       <main className="container" style={{ paddingTop: 28, paddingBottom: 64, flex: 1 }}>
         <Breadcrumbs
           items={[
-            { label: 'Repositories', href: '/#repositories' },
+            { label: 'Repositories', href: '/dashboard#repositories' },
             { label: repo?.full_name || repo?.name || 'Repository' },
           ]}
         />
@@ -723,13 +724,21 @@ export default function RepositoryPage({ params }: Props) {
                 </div>
               </div>
 
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.45, margin: 0 }}>
-                {highRiskPrs > 0
-                  ? `⚠️ ${highRiskPrs} pull request${highRiskPrs > 1 ? 's' : ''} flagged with elevated risk requiring review before merge.`
-                  : evaluatedPrs.length > 0
-                  ? '✓ All analyzed pull requests currently comply with standard safety guardrails.'
-                  : 'Run automated risk analyses on open pull requests to populate repository safety metrics.'}
-              </p>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.45, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                {highRiskPrs > 0 ? (
+                  <>
+                    <AlertTriangle size={13} style={{ color: 'var(--risk-high)', flexShrink: 0 }} />
+                    <span>{highRiskPrs} pull request{highRiskPrs > 1 ? 's' : ''} flagged with elevated risk requiring review before merge.</span>
+                  </>
+                ) : evaluatedPrs.length > 0 ? (
+                  <>
+                    <CheckCircle2 size={13} style={{ color: 'var(--risk-low)', flexShrink: 0 }} />
+                    <span>All analyzed pull requests currently comply with standard safety guardrails.</span>
+                  </>
+                ) : (
+                  <span>Run automated risk analyses on open pull requests to populate repository safety metrics.</span>
+                )}
+              </div>
             </div>
 
             {/* 2. Critical Attention Watchlist (Only shows High/Medium Risk PRs needing review) */}
@@ -842,6 +851,7 @@ export default function RepositoryPage({ params }: Props) {
           </div>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

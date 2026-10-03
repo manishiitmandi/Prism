@@ -33,6 +33,7 @@ import {
   SlidersHorizontal,
   ChevronRight,
   Eye,
+  Sparkles,
 } from 'lucide-react';
 
 interface ImpactGraphProps {
@@ -727,8 +728,9 @@ function ImpactGraphInner({ graphData, changedSymbols }: ImpactGraphProps) {
           </span>
         </div>
 
-        <span style={{ fontStyle: 'italic', opacity: 0.8 }}>
-          💡 Click any node to pin & inspect call paths
+        <span style={{ opacity: 0.85, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <Sparkles size={12} style={{ color: '#38bdf8' }} />
+          <span>Click any node to pin & inspect call paths</span>
         </span>
       </div>
 

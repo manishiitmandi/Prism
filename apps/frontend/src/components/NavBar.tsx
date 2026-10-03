@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Layers,
   FolderGit2,
@@ -13,8 +13,11 @@ import {
   LayoutDashboard,
   ChevronDown,
   User as UserIcon,
+  Activity,
+  ShieldAlert,
+  ArrowRight,
+  Star,
 } from 'lucide-react';
-import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 interface NavBarProps {
@@ -24,25 +27,9 @@ interface NavBarProps {
 
 export default function NavBar({ subtitle, badge }: NavBarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, openAuthModal, logout } = useAuth();
-  const [isOnline, setIsOnline] = useState<boolean | null>(null);
-  const [version, setVersion] = useState<string>('v0.1.0');
   const [showUserMenu, setShowUserMenu] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    api.health()
-      .then(res => {
-        if (mounted) {
-          setIsOnline(true);
-          if (res.version) setVersion(`v${res.version}`);
-        }
-      })
-      .catch(() => {
-        if (mounted) setIsOnline(false);
-      });
-    return () => { mounted = false; };
-  }, []);
 
   // Determine badge styling
   const badgeUpper = badge?.toUpperCase() || '';
@@ -112,16 +99,6 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
             </span>
           </Link>
 
-          {/* Context Divider & Subtitle */}
-          {subtitle && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-              <span className="nav-brand-divider">/</span>
-              <span className="nav-brand-subtitle" title={subtitle}>
-                {subtitle}
-              </span>
-            </div>
-          )}
-
           {/* Active Context / Risk Badge */}
           {badge && (
             <span className={`nav-context-pill ${badgeClass}`}>
@@ -134,64 +111,72 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
         {/* Center: Segmented Frosted Glass Navigation Track */}
         <div className="nav-segmented-track" suppressHydrationWarning>
           {user ? (
-            <Link
-              href="/dashboard"
-              className={`nav-segmented-item ${pathname === '/dashboard' ? 'active' : ''}`}
-            >
-              <LayoutDashboard size={13} />
-              <span>Dashboard</span>
-            </Link>
+            <>
+              <Link
+                href="/dashboard"
+                className={`nav-segmented-item ${pathname === '/dashboard' ? 'active' : ''}`}
+              >
+                <LayoutDashboard size={13} />
+                <span>Dashboard</span>
+              </Link>
+              <Link
+                href="/dashboard#repositories"
+                className="nav-segmented-item"
+              >
+                <FolderGit2 size={13} />
+                <span>Connected Repos</span>
+              </Link>
+              <Link
+                href="/dashboard#analyses"
+                className="nav-segmented-item"
+              >
+                <GitPullRequest size={13} />
+                <span>Risk Reports</span>
+              </Link>
+              <Link
+                href="/#simulator"
+                className="nav-segmented-item"
+              >
+                <Sparkles size={13} />
+                <span>Simulator</span>
+              </Link>
+            </>
           ) : (
-            <Link
-              href="/"
-              className={`nav-segmented-item ${pathname === '/' ? 'active' : ''}`}
-            >
-              <Layers size={13} />
-              <span>Workspace</span>
-            </Link>
+            <>
+              <Link
+                href="/#features"
+                className="nav-segmented-item"
+              >
+                <Layers size={13} />
+                <span>Features</span>
+              </Link>
+              <Link
+                href="/#simulator"
+                className="nav-segmented-item"
+              >
+                <Sparkles size={13} />
+                <span>Live Simulator</span>
+              </Link>
+              <Link
+                href="/#how-it-works"
+                className="nav-segmented-item"
+              >
+                <Activity size={13} />
+                <span>How It Works</span>
+              </Link>
+              <Link
+                href="/#metrics"
+                className="nav-segmented-item"
+              >
+                <ShieldAlert size={13} />
+                <span>Risk Metrics</span>
+              </Link>
+            </>
           )}
-
-          <Link
-            href="/#repositories"
-            className={`nav-segmented-item ${pathname.startsWith('/repositories') ? 'active' : ''}`}
-          >
-            <FolderGit2 size={13} />
-            <span>Repositories</span>
-          </Link>
-
-          <Link
-            href="/#recent-analyses"
-            className={`nav-segmented-item ${pathname.startsWith('/analyses') ? 'active' : ''}`}
-          >
-            <GitPullRequest size={13} />
-            <span>Analyses</span>
-          </Link>
         </div>
 
-        {/* Right: Engine Telemetry Beacon & GitHub Link & Auth Profile */}
+        {/* Right: GitHub Link & Auth Profile */}
         <div className="nav-right-group" suppressHydrationWarning>
-          {/* Realtime Engine Telemetry Beacon */}
-          <div
-            className="nav-telemetry-capsule"
-            title={
-              isOnline === false
-                ? 'PRism Backend API is currently offline'
-                : `PRism Code Intelligence Engine ${version} · Systems Operational`
-            }
-          >
-            <div className="nav-beacon-wrapper">
-              <span className={`nav-beacon-dot ${isOnline === false ? 'offline' : 'online'}`} />
-              <span className={`nav-beacon-ping ${isOnline === false ? 'offline' : 'online'}`} />
-            </div>
-
-            <div className="nav-telemetry-text">
-              <span style={{ color: isOnline === false ? 'var(--risk-high)' : 'var(--text-primary)', fontWeight: 600 }}>
-                {isOnline === null ? 'Connecting...' : isOnline ? `Core ${version}` : 'API Offline'}
-              </span>
-              <span className="nav-telemetry-sep">·</span>
-              <span className="nav-telemetry-tag">{isOnline ? 'Online' : 'Offline'}</span>
-            </div>
-          </div>
 
           {/* Authentic GitHub Button */}
           <a
@@ -205,7 +190,10 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
               <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
             </svg>
             <span className="nav-github-label">GitHub</span>
-            <span className="nav-github-star-pill">★ Star</span>
+            <span className="nav-github-star-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+              <Star size={10} fill="currentColor" />
+              <span>Star</span>
+            </span>
           </a>
 
           {/* Auth Controls: User Dropdown or Sign In Button */}
@@ -301,9 +289,10 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
 
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setShowUserMenu(false);
-                      logout();
+                      await logout();
+                      router.push('/');
                     }}
                     style={{
                       width: '100%',
@@ -328,29 +317,51 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
               )}
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={openAuthModal}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '7px 15px',
-                borderRadius: 8,
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%)',
-                border: '1px solid rgba(167, 139, 250, 0.35)',
-                color: '#ffffff',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: '0 2px 10px rgba(99, 102, 241, 0.25)',
-                transition: 'all 0.15s ease',
-              }}
-              className="hover-bright"
-            >
-              <LogIn size={13} style={{ color: '#c084fc' }} />
-              <span>Sign In</span>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Link
+                href="/login"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 13px',
+                  borderRadius: 8,
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  transition: 'all 0.15s ease',
+                }}
+                className="hover-card"
+              >
+                <LogIn size={13} style={{ color: 'var(--text-secondary)' }} />
+                <span>Sign In</span>
+              </Link>
+              <Link
+                href="/login?mode=register"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 14px',
+                  borderRadius: 8,
+                  background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                  border: '1px solid rgba(167, 139, 250, 0.4)',
+                  color: '#ffffff',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  boxShadow: '0 2px 14px rgba(99, 102, 241, 0.35)',
+                  transition: 'all 0.15s ease',
+                }}
+                className="hover-bright"
+              >
+                <span>Get Started</span>
+                <ArrowRight size={12} />
+              </Link>
+            </div>
           )}
         </div>
       </div>

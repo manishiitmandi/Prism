@@ -21,6 +21,7 @@ import {
 interface SignInCardProps {
   onSuccess?: () => void;
   isModal?: boolean;
+  initialMode?: 'signin' | 'register';
 }
 
 // Email validation regex
@@ -36,11 +37,11 @@ function getPasswordErrors(password: string): string[] {
   return errors;
 }
 
-export default function SignInCard({ onSuccess, isModal = false }: SignInCardProps) {
+export default function SignInCard({ onSuccess, isModal = false, initialMode = 'signin' }: SignInCardProps) {
   const router = useRouter();
   const { loginWithEmail, registerWithEmail, loginWithGitHub, loginWithGoogle, loginWithDemo, loading } = useAuth();
 
-  const [mode, setMode] = useState<'signin' | 'register'>('signin');
+  const [mode, setMode] = useState<'signin' | 'register'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -637,7 +638,10 @@ export default function SignInCard({ onSuccess, isModal = false }: SignInCardPro
           color: 'var(--text-muted)',
         }}
       >
-        <span suppressHydrationWarning>🔒 256-bit encrypted authentication</span>
+        <span suppressHydrationWarning style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <Lock size={12} style={{ color: '#10b981' }} />
+          <span>256-bit encrypted authentication</span>
+        </span>
         <span>•</span>
         <span>Zero repository write access</span>
       </div>

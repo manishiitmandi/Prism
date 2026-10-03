@@ -132,7 +132,7 @@ export default function AnalysisPage({ params }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <Breadcrumbs
             items={[
-              { label: 'Repositories', href: '/#repositories' },
+              { label: 'Repositories', href: '/dashboard#repositories' },
               ...(repo
                 ? [{ label: repo.full_name || repo.name, href: `/repositories/${repo.name}` }]
                 : []),
