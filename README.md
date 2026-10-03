@@ -1,4 +1,4 @@
-# PRism 🔍
+# PRism
 
 > **Autonomous AI Pull Request Risk Analyzer & Downstream Blast Radius Intelligence Engine**
 
