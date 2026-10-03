@@ -68,6 +68,9 @@ class Repository(Base):
     code_chunks: Mapped[list["CodeChunkModel"]] = relationship(
         "CodeChunkModel", back_populates="repository", cascade="all, delete-orphan"
     )
+    tracked_by_users: Mapped[list["UserRepository"]] = relationship(
+        "UserRepository", back_populates="repository", cascade="all, delete-orphan"
+    )
 
 
 class PullRequest(Base):
@@ -162,3 +165,47 @@ class CodeChunkModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     repository: Mapped["Repository"] = relationship("Repository", back_populates="code_chunks")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    auth_provider: Mapped[str] = mapped_column(String(50), default="github")  # github, google, demo
+    github_id: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True)
+    google_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    username: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    github_access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    monitored_repositories: Mapped[list["UserRepository"]] = relationship(
+        "UserRepository", back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class UserRepository(Base):
+    """User's tracked/pinned repositories on their dashboard."""
+    __tablename__ = "user_repositories"
+    __table_args__ = (UniqueConstraint("user_id", "repository_id", name="uq_user_repository"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    repository_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role: Mapped[str] = mapped_column(String(50), default="tracked_oss")  # owner, collaborator, tracked_oss
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    user: Mapped["User"] = relationship("User", back_populates="monitored_repositories")
+    repository: Mapped["Repository"] = relationship("Repository", back_populates="tracked_by_users")
+

@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import analyses, repositories, webhooks
+from app.api.v1 import analyses, auth, repositories, webhooks
 from app.core.config import get_settings
 from app.core.database import Base, engine
 from app.core.logging import configure_logging, get_logger
@@ -53,6 +53,7 @@ app.add_middleware(
 
 # Routers
 prefix = settings.api_v1_prefix
+app.include_router(auth.router, prefix=prefix)
 app.include_router(repositories.router, prefix=prefix)
 app.include_router(analyses.router, prefix=prefix)
 app.include_router(webhooks.router, prefix=prefix)

@@ -8,8 +8,14 @@ import {
   FolderGit2,
   GitPullRequest,
   Sparkles,
+  LogIn,
+  LogOut,
+  LayoutDashboard,
+  ChevronDown,
+  User as UserIcon,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 interface NavBarProps {
   subtitle?: string;
@@ -18,8 +24,10 @@ interface NavBarProps {
 
 export default function NavBar({ subtitle, badge }: NavBarProps) {
   const pathname = usePathname();
+  const { user, openAuthModal, logout } = useAuth();
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
   const [version, setVersion] = useState<string>('v0.1.0');
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -125,13 +133,23 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
 
         {/* Center: Segmented Frosted Glass Navigation Track */}
         <div className="nav-segmented-track" suppressHydrationWarning>
-          <Link
-            href="/"
-            className={`nav-segmented-item ${pathname === '/' ? 'active' : ''}`}
-          >
-            <Layers size={13} />
-            <span>Workspace</span>
-          </Link>
+          {user ? (
+            <Link
+              href="/dashboard"
+              className={`nav-segmented-item ${pathname === '/dashboard' ? 'active' : ''}`}
+            >
+              <LayoutDashboard size={13} />
+              <span>Dashboard</span>
+            </Link>
+          ) : (
+            <Link
+              href="/"
+              className={`nav-segmented-item ${pathname === '/' ? 'active' : ''}`}
+            >
+              <Layers size={13} />
+              <span>Workspace</span>
+            </Link>
+          )}
 
           <Link
             href="/#repositories"
@@ -150,7 +168,7 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
           </Link>
         </div>
 
-        {/* Right: Engine Telemetry Beacon & GitHub Link */}
+        {/* Right: Engine Telemetry Beacon & GitHub Link & Auth Profile */}
         <div className="nav-right-group" suppressHydrationWarning>
           {/* Realtime Engine Telemetry Beacon */}
           <div
@@ -190,15 +208,150 @@ export default function NavBar({ subtitle, badge }: NavBarProps) {
             <span className="nav-github-star-pill">★ Star</span>
           </a>
 
-          {/* Quick Action Button */}
-          <Link
-            href="/#repositories"
-            className="nav-action-btn"
-            title="Analyze a Pull Request"
-          >
-            <Sparkles size={13} />
-            <span>Analyze PR</span>
-          </Link>
+          {/* Auth Controls: User Dropdown or Sign In Button */}
+          {user ? (
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '4px 10px 4px 5px',
+                  borderRadius: 100,
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {user.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt={user.username}
+                    style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.68rem',
+                    }}
+                  >
+                    {user.username.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <span>{user.name?.split(' ')[0] || user.username}</span>
+                <ChevronDown size={12} style={{ color: 'var(--text-muted)' }} />
+              </button>
+
+              {showUserMenu && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    right: 0,
+                    width: 210,
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 12,
+                    padding: 6,
+                    boxShadow: '0 16px 36px rgba(0, 0, 0, 0.7), 0 0 20px rgba(99, 102, 241, 0.12)',
+                    zIndex: 1000,
+                    animation: 'slideUp 0.15s ease',
+                  }}
+                >
+                  <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {user.name || user.username}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      @{user.username} · {user.auth_provider}
+                    </div>
+                  </div>
+
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setShowUserMenu(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      color: 'var(--text-primary)',
+                      fontSize: '0.78rem',
+                      textDecoration: 'none',
+                    }}
+                    className="hover-card"
+                  >
+                    <LayoutDashboard size={14} style={{ color: 'var(--accent-secondary)' }} />
+                    <span>My Dashboard</span>
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      logout();
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      color: 'var(--risk-high)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.78rem',
+                      textAlign: 'left',
+                    }}
+                    className="hover-card"
+                  >
+                    <LogOut size={14} />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={openAuthModal}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 15px',
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%)',
+                border: '1px solid rgba(167, 139, 250, 0.35)',
+                color: '#ffffff',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 2px 10px rgba(99, 102, 241, 0.25)',
+                transition: 'all 0.15s ease',
+              }}
+              className="hover-bright"
+            >
+              <LogIn size={13} style={{ color: '#c084fc' }} />
+              <span>Sign In</span>
+            </button>
+          )}
         </div>
       </div>
     </nav>

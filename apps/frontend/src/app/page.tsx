@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import NavBar from '@/components/NavBar';
 import RiskBadge from '@/components/RiskBadge';
 import StatusBadge from '@/components/StatusBadge';
+import { useAuth } from '@/context/AuthContext';
 import {
   FolderGit2,
   GitPullRequest,
@@ -28,10 +29,30 @@ import {
   GitBranch,
   Terminal,
   Activity,
+  Globe,
+  Bookmark,
 } from 'lucide-react';
+
+function parseGitHubPrUrl(input: string): { owner: string; name: string; prNumber: number } | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  // Match full URL: https://github.com/owner/repo/pull/123 or github.com/owner/repo/pull/123
+  const urlMatch = trimmed.match(/(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)\/pull\/(\d+)/i);
+  if (urlMatch) {
+    return { owner: urlMatch[1], name: urlMatch[2], prNumber: parseInt(urlMatch[3], 10) };
+  }
+  // Match shorthand: owner/repo#123 or owner/repo/pull/123
+  const shortMatch = trimmed.match(/^([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)#(\d+)$/i) ||
+                     trimmed.match(/^([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)\/pull\/(\d+)$/i);
+  if (shortMatch) {
+    return { owner: shortMatch[1], name: shortMatch[2], prNumber: parseInt(shortMatch[3], 10) };
+  }
+  return null;
+}
 
 export default function HomePage() {
   const router = useRouter();
+  const { user, isAuthenticated, openAuthModal } = useAuth();
   const [repos, setRepos] = useState<Repository[]>([]);
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +62,9 @@ export default function HomePage() {
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  // Quick Analyze State
+  // Quick / Universal Analyze State
+  const [analyzerTab, setAnalyzerTab] = useState<'url' | 'saved'>('url');
+  const [prUrlInput, setPrUrlInput] = useState('');
   const [quickRepoId, setQuickRepoId] = useState('');
   const [quickPrNumber, setQuickPrNumber] = useState('');
   const [quickAnalyzing, setQuickAnalyzing] = useState(false);
@@ -95,20 +118,50 @@ export default function HomePage() {
     }
   }
 
-  async function handleQuickAnalyze(e?: React.FormEvent, customRepoId?: string, customPrNum?: number) {
+  async function handleUniversalAnalyze(e?: React.FormEvent, directUrl?: string) {
     if (e) e.preventDefault();
-    const rId = customRepoId || quickRepoId;
-    const prNum = customPrNum || parseInt(quickPrNumber.trim(), 10);
-    if (!rId || isNaN(prNum) || prNum <= 0) return;
-
-    setQuickAnalyzing(true);
     setQuickError(null);
-    try {
-      const result = await api.triggerAnalysis(rId, prNum);
-      router.push(`/analyses/${result.id}`);
-    } catch (err: unknown) {
-      setQuickError(err instanceof Error ? err.message : 'Failed to trigger PR analysis');
-      setQuickAnalyzing(false);
+
+    if (analyzerTab === 'url' || directUrl) {
+      const targetStr = directUrl || prUrlInput;
+      const parsed = parseGitHubPrUrl(targetStr);
+      if (!parsed) {
+        setQuickError('Please enter a valid GitHub PR link (e.g. https://github.com/fastapi/fastapi/pull/16159) or shorthand (owner/repo#123).');
+        return;
+      }
+
+      setQuickAnalyzing(true);
+      try {
+        // Find existing or auto-register public repository
+        let repo = repos.find(
+          r => r.owner.toLowerCase() === parsed.owner.toLowerCase() && r.name.toLowerCase() === parsed.name.toLowerCase()
+        );
+        if (!repo) {
+          repo = await api.createRepository(parsed.owner, parsed.name);
+          setRepos(prev => [repo!, ...prev.filter(r => r.id !== repo!.id)]);
+        }
+
+        const result = await api.triggerAnalysis(repo.id, parsed.prNumber);
+        router.push(`/analyses/${result.id}`);
+      } catch (err: unknown) {
+        setQuickError(err instanceof Error ? err.message : 'Failed to analyze public pull request');
+        setQuickAnalyzing(false);
+      }
+    } else {
+      const prNum = parseInt(quickPrNumber.trim(), 10);
+      if (!quickRepoId || isNaN(prNum) || prNum <= 0) {
+        setQuickError('Please select a repository and enter a positive PR number.');
+        return;
+      }
+
+      setQuickAnalyzing(true);
+      try {
+        const result = await api.triggerAnalysis(quickRepoId, prNum);
+        router.push(`/analyses/${result.id}`);
+      } catch (err: unknown) {
+        setQuickError(err instanceof Error ? err.message : 'Failed to trigger PR analysis');
+        setQuickAnalyzing(false);
+      }
     }
   }
 
@@ -183,6 +236,56 @@ export default function HomePage() {
               </button>
             </div>
           </div>
+
+          {/* Authenticated User Status Banner */}
+          {isAuthenticated && user && (
+            <div
+              style={{
+                marginBottom: 20,
+                padding: '12px 18px',
+                borderRadius: 12,
+                background: 'linear-gradient(90deg, rgba(99, 102, 241, 0.12) 0%, rgba(168, 85, 247, 0.08) 100%)',
+                border: '1px solid rgba(99, 102, 241, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 16,
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '1.1rem' }} suppressHydrationWarning>👋</span>
+                <div>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#ffffff' }}>
+                    Welcome back, {user.name || user.username}!
+                  </span>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: 8 }}>
+                    Your personal &amp; monitored repositories are synced.
+                  </span>
+                </div>
+              </div>
+              <Link
+                href="/dashboard"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: 'var(--accent-secondary)',
+                  textDecoration: 'none',
+                  padding: '6px 14px',
+                  borderRadius: 8,
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span>Go to My Dashboard</span>
+                <ArrowRight size={13} />
+              </Link>
+            </div>
+          )}
 
           {/* 4 Telemetry Metric Tiles */}
           <div className="grid-cols-4-responsive" style={{ gap: 16 }}>
@@ -279,9 +382,9 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Quick PR Analyzer Command Console */}
+        {/* Quick & Universal PR Analyzer Command Console */}
         <div className="hero-command-card" style={{ padding: '24px 28px', marginBottom: 40 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 18 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div
                 style={{
@@ -305,49 +408,74 @@ export default function HomePage() {
                   Instant Pull Request Deep Scan
                 </h3>
                 <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 2 }}>
-                  Trigger deep AST graph analysis and RAG reasoning for any pull request number
+                  Analyze any public open-source or monitored repository pull request without configuration
                 </p>
               </div>
             </div>
 
-            <form onSubmit={e => handleQuickAnalyze(e)} className="quick-analyzer-form" style={{ flex: '1 1 420px', justifyContent: 'flex-end', gap: 10 }}>
-              <select
-                value={quickRepoId}
-                onChange={e => setQuickRepoId(e.target.value)}
+            {/* Input Mode Selector */}
+            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-elevated)', padding: 3, borderRadius: 8, border: '1px solid var(--border)' }}>
+              <button
+                type="button"
+                onClick={() => setAnalyzerTab('url')}
                 style={{
-                  padding: '9px 14px',
-                  fontSize: '0.82rem',
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  borderRadius: 8,
-                  color: 'var(--text-primary)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '5px 12px',
+                  borderRadius: 6,
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  border: 'none',
                   cursor: 'pointer',
-                  flex: '1 1 180px',
-                  minWidth: 140,
-                  outline: 'none',
-                  boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.3)',
+                  background: analyzerTab === 'url' ? 'var(--accent-primary)' : 'transparent',
+                  color: analyzerTab === 'url' ? '#ffffff' : 'var(--text-muted)',
+                  transition: 'all 0.15s ease',
                 }}
               >
-                {repos.map(r => (
-                  <option key={r.id} value={r.id}>
-                    {r.full_name}
-                  </option>
-                ))}
-              </select>
+                <Globe size={13} />
+                <span>Any Public PR Link</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAnalyzerTab('saved')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '5px 12px',
+                  borderRadius: 6,
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: analyzerTab === 'saved' ? 'var(--accent-primary)' : 'transparent',
+                  color: analyzerTab === 'saved' ? '#ffffff' : 'var(--text-muted)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <Bookmark size={13} />
+                <span>Monitored Repos ({repos.length})</span>
+              </button>
+            </div>
+          </div>
 
-              <div style={{ position: 'relative', flex: '1 1 130px', minWidth: 110 }}>
-                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: "'JetBrains Mono', monospace" }}>
-                  #
+          {/* Form Area */}
+          <form onSubmit={e => handleUniversalAnalyze(e)} style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {analyzerTab === 'url' ? (
+              <div style={{ flex: '1 1 340px', position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>
+                  <Globe size={15} />
                 </span>
                 <input
-                  type="number"
-                  placeholder="PR (e.g. 16159)"
-                  value={quickPrNumber}
-                  onChange={e => setQuickPrNumber(e.target.value)}
+                  type="text"
+                  placeholder="Paste GitHub PR URL (e.g. https://github.com/fastapi/fastapi/pull/16159) or shorthand (owner/repo#123)"
+                  value={prUrlInput}
+                  onChange={e => setPrUrlInput(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '9px 12px 9px 24px',
-                    fontSize: '0.82rem',
+                    padding: '10px 14px 10px 38px',
+                    fontSize: '0.84rem',
                     background: 'var(--bg-elevated)',
                     border: '1px solid rgba(255, 255, 255, 0.12)',
                     borderRadius: 8,
@@ -358,65 +486,119 @@ export default function HomePage() {
                   }}
                 />
               </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 10, flex: '1 1 340px', flexWrap: 'wrap' }}>
+                <select
+                  value={quickRepoId}
+                  onChange={e => setQuickRepoId(e.target.value)}
+                  style={{
+                    padding: '10px 14px',
+                    fontSize: '0.82rem',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: 8,
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    flex: '1 1 200px',
+                    outline: 'none',
+                  }}
+                >
+                  {repos.map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.full_name}
+                    </option>
+                  ))}
+                </select>
 
-              <button
-                type="submit"
-                disabled={!quickPrNumber || quickAnalyzing || repos.length === 0}
-                className="btn btn-primary"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  padding: '9px 20px',
-                  fontSize: '0.82rem',
-                  borderRadius: 8,
-                  flexShrink: 0,
-                  boxShadow: '0 4px 16px rgba(99, 102, 241, 0.4)',
-                }}
-              >
-                {quickAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} fill="currentColor" />}
-                <span>{quickAnalyzing ? 'Evaluating...' : 'Run Deep Analysis'}</span>
-              </button>
-            </form>
-          </div>
+                <div style={{ position: 'relative', width: 140 }}>
+                  <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: "'JetBrains Mono', monospace" }}>
+                    #
+                  </span>
+                  <input
+                    type="number"
+                    placeholder="PR #"
+                    value={quickPrNumber}
+                    onChange={e => setQuickPrNumber(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px 10px 24px',
+                      fontSize: '0.82rem',
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      borderRadius: 8,
+                      color: '#ffffff',
+                      fontFamily: "'JetBrains Mono', monospace",
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
-          {/* Quick Demo PR Chips */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255, 255, 255, 0.06)', flexWrap: 'wrap' }}>
+            <button
+              type="submit"
+              disabled={quickAnalyzing || (analyzerTab === 'url' ? !prUrlInput.trim() : !quickPrNumber || repos.length === 0)}
+              className="btn btn-primary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: '10px 22px',
+                fontSize: '0.84rem',
+                borderRadius: 8,
+                flexShrink: 0,
+                boxShadow: '0 4px 16px rgba(99, 102, 241, 0.4)',
+              }}
+            >
+              {quickAnalyzing ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} fill="currentColor" />}
+              <span>{quickAnalyzing ? 'Evaluating Pull Request...' : 'Run Deep Analysis'}</span>
+            </button>
+          </form>
+
+          {/* Preset Suggestions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255, 255, 255, 0.06)', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-              Quick Suggestions:
+              Try Open Source PRs:
             </span>
-            {repos.length > 0 && (
-              <button
-                type="button"
-                className="filter-pill"
-                onClick={() => {
-                  const r = repos.find(x => x.name.toLowerCase().includes('fastapi')) || repos[0];
-                  setQuickRepoId(r.id);
-                  setQuickPrNumber('16159');
-                }}
-                title="Populate FastAPI PR #16159"
-              >
-                <span>⚡ fastapi #16159</span>
-                <span style={{ fontSize: '0.65rem', color: 'var(--risk-high)', fontWeight: 700 }}>(High Risk)</span>
-              </button>
-            )}
-            {repos.length > 1 && (
-              <button
-                type="button"
-                className="filter-pill"
-                onClick={() => {
-                  setQuickRepoId(repos[1].id);
-                  setQuickPrNumber('42');
-                }}
-              >
-                <span>⚡ {repos[1].name} #42</span>
-              </button>
-            )}
+            <button
+              type="button"
+              className="filter-pill"
+              onClick={() => {
+                setAnalyzerTab('url');
+                setPrUrlInput('https://github.com/fastapi/fastapi/pull/16159');
+              }}
+              title="Populate FastAPI PR #16159"
+            >
+              <span>⚡ fastapi/fastapi#16159</span>
+              <span style={{ fontSize: '0.65rem', color: 'var(--risk-high)', fontWeight: 700 }}>(High Risk)</span>
+            </button>
+            <button
+              type="button"
+              className="filter-pill"
+              onClick={() => {
+                setAnalyzerTab('url');
+                setPrUrlInput('https://github.com/pallets/flask/pull/5500');
+              }}
+              title="Populate Flask PR #5500"
+            >
+              <span>⚡ pallets/flask#5500</span>
+            </button>
+            <button
+              type="button"
+              className="filter-pill"
+              onClick={() => {
+                setAnalyzerTab('url');
+                setPrUrlInput('https://github.com/psf/requests/pull/6700');
+              }}
+              title="Populate Requests PR #6700"
+            >
+              <span>⚡ psf/requests#6700</span>
+            </button>
           </div>
 
           {quickError && (
-            <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 6, background: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.25)', fontSize: '0.75rem', color: 'var(--risk-high)' }}>
+            <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.25)', fontSize: '0.78rem', color: 'var(--risk-high)' }}>
               ⚠️ {quickError}
             </div>
           )}

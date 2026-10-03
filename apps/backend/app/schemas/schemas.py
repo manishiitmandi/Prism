@@ -165,3 +165,52 @@ class LLMRiskAnalysis(BaseModel):
     affected_components: list[AffectedComponent] = []
     recommended_tests: list[RecommendedTest] = []
     edge_cases: list[str] = []
+
+
+# ─── Auth & User Schemas ──────────────────────────────────────────────────────
+
+
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    auth_provider: str
+    username: str
+    name: str | None = None
+    email: str | None = None
+    avatar_url: str | None = None
+    created_at: datetime
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class EmailLoginRequest(BaseModel):
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., min_length=4, description="User password")
+
+
+class EmailRegisterRequest(BaseModel):
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., min_length=6, description="User password")
+    name: str | None = Field(None, description="User full display name")
+
+
+class TrackRepoRequest(BaseModel):
+    owner: str = Field(..., description="Repository owner or organization")
+    name: str = Field(..., description="Repository name")
+    role: str = Field("tracked_oss", description="Role: 'owner', 'collaborator', or 'tracked_oss'")
+
+
+class UserMonitoredRepoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    repository: RepositoryResponse
+    role: str
+    is_pinned: bool
+    created_at: datetime
+

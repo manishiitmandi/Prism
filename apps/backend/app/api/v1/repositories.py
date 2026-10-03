@@ -69,7 +69,7 @@ import uuid
 
 def _repo_filter(repo_id: str):
     try:
-        val_uuid = uuid.UUID(repo_id)
+        val_uuid = str(uuid.UUID(repo_id))
         return Repository.id == val_uuid
     except (ValueError, AttributeError):
         return (Repository.name == repo_id) | (Repository.full_name == repo_id)

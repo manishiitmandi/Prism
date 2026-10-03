@@ -33,9 +33,21 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
-    # GitHub
+    # GitHub Integration
     github_token: str = ""
     github_webhook_secret: str = ""
+
+    # Authentication & JWT
+    secret_key: str = "prism-dev-secret-key-change-in-production-12345"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
+    frontend_url: str = "http://localhost:3000"
+
+    # OAuth Providers
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    google_client_id: str = ""
+    google_client_secret: str = ""
 
     # LLM (OpenAI by default, Anthropic or Gemini optional)
     llm_provider: Literal["openai", "anthropic", "gemini"] = "openai"

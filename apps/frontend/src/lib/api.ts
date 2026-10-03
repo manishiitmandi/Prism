@@ -1,11 +1,38 @@
-/** API client for PRism backend */
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const API_V1 = `${API_BASE}/api/v1`;
 
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+  if (typeof window !== 'undefined') {
+    if (token) {
+      localStorage.setItem('prism_token', token);
+    } else {
+      localStorage.removeItem('prism_token');
+    }
+  }
+}
+
+export function getAuthToken(): string | null {
+  if (authToken) return authToken;
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('prism_token');
+  }
+  return null;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
   const res = await fetch(`${API_V1}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders,
+      ...options?.headers,
+    },
     ...options,
   });
 
@@ -207,9 +234,85 @@ export interface AnalysisStatus {
   updated_at: string;
 }
 
+export interface User {
+  id: string;
+  auth_provider: string;
+  username: string;
+  name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  created_at: string;
+}
+
+export interface UserMonitoredRepo {
+  id: string;
+  repository: Repository;
+  role: string;
+  is_pinned: boolean;
+  created_at: string;
+}
+
+export interface AuthTokenResponse {
+  access_token: string;
+  token_type: string;
+  user: User;
+}
+
 // ─── API Functions ──────────────────────────────────────────────────────────
 
 export const api = {
+  // Authentication & User
+  async loginWithEmail(email: string, password: string): Promise<AuthTokenResponse> {
+    const res = await request<AuthTokenResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    setAuthToken(res.access_token);
+    return res;
+  },
+
+  async registerWithEmail(email: string, password: string, name?: string): Promise<AuthTokenResponse> {
+    const res = await request<AuthTokenResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, name }),
+    });
+    setAuthToken(res.access_token);
+    return res;
+  },
+
+  async demoLogin(): Promise<AuthTokenResponse> {
+    const res = await request<AuthTokenResponse>('/auth/demo-login', { method: 'POST' });
+    setAuthToken(res.access_token);
+    return res;
+  },
+
+  async getMe(): Promise<User> {
+    return request<User>('/auth/me');
+  },
+
+  async logout(): Promise<{ message: string }> {
+    const res = await request<{ message: string }>('/auth/logout', { method: 'POST' });
+    setAuthToken(null);
+    return res;
+  },
+
+  async getMonitoredRepositories(): Promise<UserMonitoredRepo[]> {
+    return request<UserMonitoredRepo[]>('/auth/monitored-repos');
+  },
+
+  async trackRepository(owner: string, name: string, role: string = 'tracked_oss'): Promise<UserMonitoredRepo> {
+    return request<UserMonitoredRepo>('/auth/track-repo', {
+      method: 'POST',
+      body: JSON.stringify({ owner, name, role }),
+    });
+  },
+
+  async untrackRepository(repositoryId: string): Promise<{ message: string }> {
+    return request<{ message: string }>(`/auth/track-repo/${repositoryId}`, {
+      method: 'DELETE',
+    });
+  },
+
   // Repositories
   async listRepositories(): Promise<Repository[]> {
     return request<Repository[]>('/repositories');
