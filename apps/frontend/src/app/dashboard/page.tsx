@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import NavBar from '@/components/NavBar';
 import Footer from '@/components/Footer';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import UserAvatar from '@/components/UserAvatar';
 import RiskBadge from '@/components/RiskBadge';
 import { api, UserMonitoredRepo, Analysis } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -265,37 +266,17 @@ export default function DashboardPage() {
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              {user?.avatar_url ? (
-                <img
-                  src={user.avatar_url}
-                  alt={user.username}
-                  style={{
-                    width: 54,
-                    height: 54,
-                    borderRadius: 14,
-                    border: '2px solid rgba(255, 255, 255, 0.15)',
-                    objectFit: 'cover',
-                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: 54,
-                    height: 54,
-                    borderRadius: 14,
-                    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.25rem',
-                    fontWeight: 800,
-                    color: '#ffffff',
-                  }}
-                >
-                  {user?.username ? user.username.slice(0, 2).toUpperCase() : 'ME'}
-                </div>
-              )}
+              <UserAvatar
+                avatarUrl={user?.avatar_url}
+                name={user?.name}
+                username={user?.username}
+                size={54}
+                borderRadius={14}
+                style={{
+                  border: '2px solid rgba(255, 255, 255, 0.15)',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
+                }}
+              />
 
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
